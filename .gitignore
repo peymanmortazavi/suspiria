@@ -1,3 +1,12 @@
+# CMake
+cmake-build-*
+
+# macOS
+.DS_Store
+
+# JetBrains IDE
+.idea
+
 # Prerequisites
 *.d
 
