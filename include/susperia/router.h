@@ -41,9 +41,9 @@ namespace suspiria {
         std::for_each(begin(args), end(args), [&](auto& arg) { this->_hash += hash_func(arg); });
       };
       virtual bool match(const std::string& route, RouterParams& params) const = 0;
-      size_t get_hash() const { return this->_hash; }
+      size_t hash_code() const { return this->_hash; }
       bool operator==(const RouteMatcher& other_matcher) const {
-        return ((typeid(*this) == typeid(other_matcher)) && (other_matcher.get_hash() == this->get_hash()));
+        return ((typeid(*this) == typeid(other_matcher)) && (other_matcher.hash_code() == this->hash_code()));
       }
       bool operator!=(const RouteMatcher& other_matcher) const {
         return !(*this == other_matcher);
