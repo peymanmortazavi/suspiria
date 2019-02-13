@@ -57,7 +57,7 @@ namespace suspiria {
 
       const Status& get_status() const { return _status; }
       int polling_timeout = 1000;  // timeout for every poll (in milliseconds)
-      Router<HttpRequestHandler> router;
+//      Router<HttpRequestHandler> router;
 
     private:
       mg_mgr _manager;

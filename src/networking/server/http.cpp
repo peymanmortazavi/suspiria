@@ -6,6 +6,7 @@
 #include <string>
 #include <sstream>
 #include <iostream>
+#include <fstream>
 
 #include <susperia/http.h>
 
@@ -47,6 +48,19 @@ string HttpResponse::flush() {
   return content.str();
 }
 
+string create_response_header(HttpResponse& response) {
+  stringstream output_writer;
+  output_writer << "HTTP/1.1 " << response.status << " " << status_text_map[response.status] << endh;
+
+  // Update headers.
+  if (response.headers["Server"].empty()) { response.headers["Server"] = "Suspiria"; }
+  for (const auto& item : response.headers) {
+    output_writer << item.first << ": " << item.second << endh;
+  }
+  output_writer << endh;
+  return output_writer.str();
+}
+
 
 static void handle_mg_event(struct mg_connection* connection, int event, void* data) {
   if (event == MG_EV_POLL) return;
@@ -56,16 +70,27 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
     case MG_EV_HTTP_REQUEST:
       auto request = (http_message*) data;
       auto uri = string(request->uri.p, request->uri.len);
-      if (auto handler = server->router.resolve(uri)) {
-        auto http_request = HttpRequest();
-        auto response = handler->handle(http_request);
-        mg_printf(connection, "%s", response.flush().c_str());
-      } else {
+//      if (auto handler = server->router.resolve(uri)) {
+//        auto http_request = HttpRequest();
+//        auto response = handler->handle(http_request);
+////        auto content = response.writer.str();
+////        response.headers["Content-Length"] = to_string(content.size());
+//        ifstream my_file;
+//        my_file.tellg();
+//        my_file.seekg(0, ios::end);
+//        my_file.open("/home/tools/a.txt", ios::in | ios::binary);
+//        auto size = (int)my_file.tellg();
+//        response.headers["Content-Length"] = to_string(size);
+//        auto header = create_response_header(response);
+//        mg_send(connection, header.c_str(), (int)header.size());
+//        mg_send(connection, my_file.rdbuf(), size);
+////        mg_send(connection, content.c_str(), (int)content.size());
+//      } else {
         auto response = HttpResponse();
         response.status = HttpStatus::NotFound;
         response.writer << "No Handler For " << uri;
-        mg_printf(connection, "%s", response.flush().c_str());
-      }
+//        mg_printf(connection, "%s", );
+//      }
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }

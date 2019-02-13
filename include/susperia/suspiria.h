@@ -7,5 +7,6 @@
 
 #include "router.h"
 #include "http.h"
+#include "utility.h"
 
 #endif //SUSPIRIA_SUSPIRIA_H
