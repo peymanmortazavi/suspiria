@@ -70,27 +70,25 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
     case MG_EV_HTTP_REQUEST:
       auto request = (http_message*) data;
       auto uri = string(request->uri.p, request->uri.len);
-//      if (auto handler = server->router.resolve(uri)) {
-//        auto http_request = HttpRequest();
-//        auto response = handler->handle(http_request);
-////        auto content = response.writer.str();
-////        response.headers["Content-Length"] = to_string(content.size());
-//        ifstream my_file;
-//        my_file.tellg();
-//        my_file.seekg(0, ios::end);
-//        my_file.open("/home/tools/a.txt", ios::in | ios::binary);
-//        auto size = (int)my_file.tellg();
-//        response.headers["Content-Length"] = to_string(size);
-//        auto header = create_response_header(response);
-//        mg_send(connection, header.c_str(), (int)header.size());
-//        mg_send(connection, my_file.rdbuf(), size);
-////        mg_send(connection, content.c_str(), (int)content.size());
-//      } else {
+      auto result = server->router.resolve(uri);
+      if (result.matched) {
+        auto http_request = HttpRequest{result.params};
+        auto response = result.handler->handle(http_request);
+        auto content = response.writer.str();
+        response.headers["Content-Length"] = to_string(content.size());
+        auto header = create_response_header(response);
+        mg_send(connection, header.c_str(), (int)header.size());
+        mg_send(connection, content.c_str(), (int)content.size());
+      } else {
         auto response = HttpResponse();
         response.status = HttpStatus::NotFound;
         response.writer << "No Handler For " << uri;
-//        mg_printf(connection, "%s", );
-//      }
+        auto content = response.writer.str();
+        response.headers["Content-Length"] = to_string(content.size());
+        auto header = create_response_header(response);
+        mg_send(connection, header.c_str(), (int)header.size());
+        mg_send(connection, content.c_str(), (int)content.size());
+      }
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }

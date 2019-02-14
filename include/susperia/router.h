@@ -159,8 +159,10 @@ namespace suspiria {
             return result;
           }
         }
-        result.matched = true;
-        result.handler = head->handler;
+        if (head->handler) {
+          result.matched = true;
+          result.handler = head->handler;
+        }
         return result;
       }
 
