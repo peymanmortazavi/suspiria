@@ -5,11 +5,8 @@
 #include <algorithm>
 #include <iostream>
 #include <numeric>
-#include <string>
 #include <vector>
 #include <map>
-
-#include <gtest/gtest.h>
 
 #include <susperia/utility.h>
 
@@ -41,11 +38,12 @@ TEST(UtilityTests, StringPartitioner) {
   };
   for (auto& test_case : test_cases) {
     vector<string> items;
-    string_partitioner::for_each(get<0>(test_case.first), [&items](auto& item){
+    const auto& input = get<0>(test_case.first);
+    string_partitioner::for_each(input, [&items](auto& item){
       items.push_back(item);
     }, get<1>(test_case.first));
-    string a = accumulate(begin(items), end(items), string{}, [](auto& a, auto&b) { return a + " " + b; });
-    ASSERT_TRUE(equal(begin(items), end(items), begin(test_case.second))) << "INPUT: " << get<0>(test_case.first) << "\n" << a;
+    auto result = accumulate(begin(items), end(items), string{}, [](auto& text, auto& item) { return text + item + " "; });
+    ASSERT_TRUE(equal(begin(items), end(items), begin(test_case.second))) << "INPUT: " << input << "\n" << result;
   }
 
   // Make sure default separator is slash and behaviour of for_each() and next() are similar.

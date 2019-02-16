@@ -10,8 +10,7 @@ using namespace suspiria::networking;
 
 RegexRouteMatcher::RegexRouteMatcher(const vector<string> &args) : RouteMatcher(args) {
   this->_rule = regex {args[0], regex_constants::ECMAScript | regex_constants::optimize};
-  this->_names.resize(args.size() - 1);
-  copy(begin(args)+1, end(args), begin(this->_names));
+  copy(begin(args)+1, end(args), back_inserter(this->_names));
 }
 
 bool RegexRouteMatcher::match(const string &route, RouterParams &params) const {
