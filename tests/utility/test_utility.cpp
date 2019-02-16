@@ -15,13 +15,6 @@ using namespace std;
 using namespace suspiria::utility;
 
 
-vector<string> get_items(const string& input) {
-  vector<string> items;
-  string_partitioner::for_each(input, [&items](auto& item){ items.push_back(item); });
-  return items;
-}
-
-
 TEST(UtilityTests, StringPartitioner) {
   // Empty string
   string_partitioner p{""};
