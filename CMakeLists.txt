@@ -16,5 +16,14 @@ target_include_directories(suspiria
         "lib"
 )
 
+
 add_executable(suspiria_server server.cpp)
 target_link_libraries(suspiria_server suspiria)
+
+# Testing
+include(CTest)
+if (BUILD_TESTING)
+    add_subdirectory(tests)
+    enable_testing()
+    add_test(suspiria_tests tests/suspiria_tests)
+endif ()
