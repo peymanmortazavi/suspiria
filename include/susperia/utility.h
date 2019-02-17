@@ -9,26 +9,29 @@
 #include <memory>
 #include <string>
 
+#include "exceptions.h"
+
 namespace suspiria {
 
   namespace utility {
 
     template<typename T>
-    struct registry {
-      void add(const std::string& name, std::shared_ptr<T> obj) {
-        this->_storage[name] = obj;
+    class registry {
+    public:
+      void add(const std::string& name, std::unique_ptr<T>&& obj) {
+        this->_storage[name] = std::move(obj);
       }
 
-      std::shared_ptr<T> get(const std::string& name) const {
+      T& get(const std::string& name) const {
         const auto& it = this->_storage.find(name);
         if (it != end(this->_storage)) {
-          return it->second;
+          return *it->second;
         }
-        return nullptr;
+        throw RegistryNotFound{name};
       }
 
     private:
-      std::map<std::string, std::shared_ptr<T>> _storage;
+      std::map<std::string, std::unique_ptr<T>> _storage;
     };
 
 

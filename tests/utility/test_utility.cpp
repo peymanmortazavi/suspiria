@@ -8,10 +8,14 @@
 #include <vector>
 #include <map>
 
+#include <gtest/gtest.h>
+
 #include <susperia/utility.h>
+#include <susperia/exceptions.h>
 
 
 using namespace std;
+using namespace suspiria;
 using namespace suspiria::utility;
 
 
@@ -50,4 +54,15 @@ TEST(UtilityTests, StringPartitioner) {
   for (auto i = 0; splitter.next(word); i++) {
     ASSERT_EQ(word, expectation[i]);
   }
+}
+
+
+TEST(UtilityTests, Registry) {
+  registry<int> test_registry;
+  test_registry.add("test", make_unique<int>(20));
+  ASSERT_EQ(test_registry.get("test"), 20);
+  ASSERT_THROW(test_registry.get("nothing"), RegistryNotFound);
+  ASSERT_THROW(test_registry.get("nothing"), RegistryNotFound);  // make sure consecutive calls don't change anything.
+  test_registry.add("nothing", make_unique<int>(-1));
+  ASSERT_EQ(test_registry.get("nothing"), -1);
 }
