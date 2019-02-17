@@ -61,8 +61,15 @@ TEST(UtilityTests, Registry) {
   registry<int> test_registry;
   test_registry.add("test", make_unique<int>(20));
   ASSERT_EQ(test_registry.get("test"), 20);
+  ASSERT_THROW(test_registry.add("test", make_unique<int>(30)), RegistryAlreadyExists);  // override is not ok.
   ASSERT_THROW(test_registry.get("nothing"), RegistryNotFound);
   ASSERT_THROW(test_registry.get("nothing"), RegistryNotFound);  // make sure consecutive calls don't change anything.
   test_registry.add("nothing", make_unique<int>(-1));
   ASSERT_EQ(test_registry.get("nothing"), -1);
+
+  test_registry = registry<int>{true};  // clear out the registry.
+  test_registry.add("test", make_unique<int>(10));
+  ASSERT_EQ(test_registry.get("test"), 10);
+  test_registry.add("test", make_unique<int>(20));  // override should be ok.
+  ASSERT_EQ(test_registry.get("test"), 20);
 }

@@ -13,12 +13,28 @@ namespace suspiria {
   /**
    * RegistryExceptions
    */
-  class RegistryNotFound : public std::exception {
+  class RegistryError : public std::exception {};
+
+  class RegistryNotFound : public RegistryError {
   public:
     explicit RegistryNotFound(std::string resource_name) : _resource_name(std::move(resource_name)) {}
 
     const char* what() const noexcept override {
       auto message = "No resource with name '" + _resource_name + "' exists in the registry.";
+      return message.c_str();
+    }
+
+  private:
+    std::string _resource_name;
+  };
+
+
+  class RegistryAlreadyExists : public RegistryError {
+  public:
+    explicit RegistryAlreadyExists(std::string resource_name) : _resource_name(std::move(resource_name)) {}
+
+    const char* what() const noexcept override {
+      auto message = "Resource with name '" + _resource_name + "' already exists in a registry that does not allow overrides.";
       return message.c_str();
     }
 

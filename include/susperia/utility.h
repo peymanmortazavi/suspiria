@@ -18,7 +18,12 @@ namespace suspiria {
     template<typename T>
     class registry {
     public:
+      explicit registry(bool allow_overrides=false) : _allow_overrides(allow_overrides) {}
+
       void add(const std::string& name, std::unique_ptr<T>&& obj) {
+        if (!_allow_overrides && _storage.find(name) != end(_storage)) {
+          throw RegistryAlreadyExists{name};
+        }
         this->_storage[name] = std::move(obj);
       }
 
@@ -31,6 +36,7 @@ namespace suspiria {
       }
 
     private:
+      bool _allow_overrides;
       std::map<std::string, std::unique_ptr<T>> _storage;
     };
 
