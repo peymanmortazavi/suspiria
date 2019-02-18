@@ -75,8 +75,8 @@ namespace suspiria {
     /** GraphRouter comes with a fleet of specialty classes that accommodate graph routing, a fast generic routing tool.
      */
     template<class T>
-    struct router_node {
-
+    class router_node {
+    public:
       struct route_matcher_pair {
         std::unique_ptr<RouteMatcher> matcher;
         std::shared_ptr<router_node> node;
@@ -148,7 +148,7 @@ namespace suspiria {
       }
 
       ResolveResult<T> resolve(const std::string &path) const override {
-        ResolveResult<T> result;
+        ResolveResult<T> result{};
         const router_node<T>* head = &this->root;
         utility::string_partitioner it{path};
         std::string route;

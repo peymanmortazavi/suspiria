@@ -51,19 +51,20 @@ namespace suspiria {
         Idle,  // When the server is not doing anything. No I/O loop here.
       };
 
-      explicit WebSocketServer(std::string address);
+      explicit WebSocketServer(std::string address, std::shared_ptr<Router<HttpRequestHandler>> router);
       ~WebSocketServer();
       void start();
       void stop();
 
       const Status& get_status() const { return _status; }
       int polling_timeout = 1000;  // timeout for every poll (in milliseconds)
-      GraphRouter<HttpRequestHandler> router;
+      inline const Router<HttpRequestHandler>& get_router() const { return *_router; }
 
     private:
       mg_mgr _manager;
       std::string _address;
       Status _status = Status::Idle;
+      std::shared_ptr<Router<HttpRequestHandler>> _router;
     };
 
   }
