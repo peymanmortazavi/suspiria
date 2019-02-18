@@ -78,6 +78,7 @@ namespace suspiria {
     class RouterNode {
     public:
       struct route_matcher_pair {
+//        size_t hash;
         std::unique_ptr<RouteMatcher> matcher;
         std::shared_ptr<RouterNode> node;
       };
@@ -91,16 +92,14 @@ namespace suspiria {
           this->static_nodes[std::move(name)] = std::move(node);
       }
 
-      void add_node(std::unique_ptr<RouteMatcher>&& resolver, std::shared_ptr<RouterNode> node) {
-          this->dynamic_nodes.emplace_back(route_matcher_pair{std::move(resolver), std::move(node)});
+      void add_node(std::unique_ptr<RouteMatcher>&& matcher, std::shared_ptr<RouterNode> node) {
+          this->dynamic_nodes.emplace_back(route_matcher_pair{std::move(matcher), std::move(node)});
       }
     };
 
     template<class T>
     class GraphRouter : public Router<T> {
     public:
-      RouterNode<T> root;
-
       /**
        * Adds a new route to the graph router. It will automatically create all router nodes necessary to get to the
        * final path. For example /api/v3/auth will assure node api, v3 and auth get created if they don't already exist.
@@ -110,12 +109,11 @@ namespace suspiria {
        * @return The newly created or updated router_node<T>
        */
       RouterNode<T>& add_route(const std::string& path, std::shared_ptr<T> handler, const std::string& name="") {
-        auto cursor = &this->root;
+        auto cursor = &this->_root;
         utility::string_partitioner::for_each(path, [&](auto& route) {
           // If route is a static string.
           if (_is_static(route)) {
-            auto map_it = cursor->static_nodes.find(route);
-            if (map_it == end(cursor->static_nodes)) {  // create a node if one doesn't exist.
+            if (cursor->static_nodes.find(route) == end(cursor->static_nodes)) {  // create a node if one doesn't exist.
               cursor->add_node(route, std::make_shared<RouterNode<T>>());
             }
             cursor = cursor->static_nodes[route].get();
@@ -149,7 +147,7 @@ namespace suspiria {
 
       ResolveResult<T> resolve(const std::string &path) const override {
         ResolveResult<T> result{};
-        const RouterNode<T>* head = &this->root;
+        const RouterNode<T>* head = &this->_root;
         utility::string_partitioner it{path};
         std::string route;
         while (it.next(route)) {
@@ -166,7 +164,11 @@ namespace suspiria {
         return result;
       }
 
+      RouterNode<T>& get_root() noexcept { return _root; }
+
     private:
+      RouterNode<T> _root;
+
       bool _is_static(const std::string& route) {
         std::regex static_node_matcher{R"(^[\w\d]*$)", std::regex_constants::ECMAScript | std::regex_constants::icase};
         return std::regex_match(route, static_node_matcher);
