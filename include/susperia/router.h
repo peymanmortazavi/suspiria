@@ -1,3 +1,5 @@
+#include <utility>
+
 //
 // Created by Peyman Mortazavi on 2019-02-09.
 //
@@ -11,6 +13,7 @@
 #include <regex>
 #include <string>
 #include <vector>
+#include <functional>
 
 #include "utility.h"
 
@@ -20,6 +23,7 @@ namespace suspiria {
   namespace networking {
 
     typedef std::map<std::string, std::string> RouterParams;
+    typedef std::vector<std::string> RouteMatcherParams;
 
     template<class T>
     struct ResolveResult {
@@ -36,37 +40,31 @@ namespace suspiria {
     /* RouteMatcher matches routes and extends the router params upon a successful match. */
 
     struct RouteMatcher {
-      explicit RouteMatcher(const std::vector<std::string>& args) {
-        auto hash_func = std::hash<std::string>();
-        std::for_each(begin(args), end(args), [&](auto& arg) { this->_hash += hash_func(arg); });
-      };
-      virtual bool match(const std::string& route, RouterParams& params) const = 0;
-      size_t hash_code() const { return this->_hash; }
-      bool operator==(const RouteMatcher& other_matcher) const {
-        return ((typeid(*this) == typeid(other_matcher)) && (other_matcher.hash_code() == this->hash_code()));
-      }
-      bool operator!=(const RouteMatcher& other_matcher) const {
-        return !(*this == other_matcher);
-      }
-    private:
-      size_t _hash = 0;
+      virtual bool match(const std::string& route, RouterParams& params) const noexcept = 0;
     };
 
-    static utility::factory<RouteMatcher, const std::vector<std::string>&> route_matcher_factory;
-
     struct RegexRouteMatcher : public RouteMatcher {
-      explicit RegexRouteMatcher(const std::vector<std::string>& args);
-      bool match(const std::string &route, RouterParams &params) const override;
+      explicit RegexRouteMatcher(const std::string& pattern, const std::vector<std::string>& capture_names);
+      explicit RegexRouteMatcher(const std::string& pattern, std::vector<std::string>&& capture_names);
+      bool match(const std::string &route, RouterParams &params) const noexcept override;
+      static std::unique_ptr<RegexRouteMatcher> create_from_args(RouteMatcherParams&& route_args) {
+        auto pattern = route_args[0];
+        route_args.erase(route_args.begin());
+        return std::make_unique<RegexRouteMatcher>(pattern, std::move(route_args));
+      }
     private:
       std::regex _rule;
       std::vector<std::string> _names;
     };
 
     struct VariableRouteMatcher : public RouteMatcher {
-      explicit VariableRouteMatcher(const std::vector<std::string>& args) : RouteMatcher(args), _name(args[0]) {}
-      bool match(const std::string &route, RouterParams &params) const override {
+      explicit VariableRouteMatcher(std::string name) : _name(std::move(name)) {}
+      bool match(const std::string &route, RouterParams &params) const noexcept override {
         params[_name] = route;
         return true;
+      }
+      static std::unique_ptr<VariableRouteMatcher> create_from_args(RouteMatcherParams&& route_args) {
+        return std::make_unique<VariableRouteMatcher>(route_args[0]);
       }
     private:
       std::string _name;
@@ -77,29 +75,50 @@ namespace suspiria {
     template<class T>
     class RouterNode {
     public:
-      struct route_matcher_pair {
-//        size_t hash;
+      struct dynamic_node {
+        size_t hash = 0;
         std::unique_ptr<RouteMatcher> matcher;
         std::shared_ptr<RouterNode> node;
       };
 
       std::string name;
       std::map<std::string, std::shared_ptr<RouterNode>> static_nodes;
-      std::vector<route_matcher_pair> dynamic_nodes;
+      std::vector<dynamic_node> dynamic_nodes;
       std::shared_ptr<T> handler = nullptr;
 
       void add_node(std::string name, std::shared_ptr<RouterNode> node) {
           this->static_nodes[std::move(name)] = std::move(node);
       }
+      std::shared_ptr<RouterNode> get_static_node(const std::string& name) const noexcept {
+        auto it = static_nodes.find(name);
+        if (it == end(static_nodes)) return nullptr;
+        return it->second;
+      }
 
-      void add_node(std::unique_ptr<RouteMatcher>&& matcher, std::shared_ptr<RouterNode> node) {
-          this->dynamic_nodes.emplace_back(route_matcher_pair{std::move(matcher), std::move(node)});
+      void add_node(size_t hash, std::unique_ptr<RouteMatcher>&& matcher, std::shared_ptr<RouterNode> node) {
+          this->dynamic_nodes.emplace_back(dynamic_node{hash, std::move(matcher), std::move(node)});
+      }
+      std::shared_ptr<RouterNode> get_dynamic_node(const size_t& hash) const noexcept {
+        auto find_it = std::find_if(begin(dynamic_nodes), end(dynamic_nodes), [&hash](auto& item) {
+          return item.hash == hash;
+        });
+        if (find_it == end(dynamic_nodes)) return nullptr;
+        return find_it->node;
       }
     };
 
     template<class T>
     class GraphRouter : public Router<T> {
     public:
+      typedef std::function<std::unique_ptr<RouteMatcher>(RouteMatcherParams&&)> RouteMatcherFactory;
+
+      std::map<std::string, RouteMatcherFactory> aliases;
+
+      GraphRouter() {
+        aliases["var"] = &VariableRouteMatcher::create_from_args;
+        aliases["regex"] = &RegexRouteMatcher::create_from_args;
+      };
+
       /**
        * Adds a new route to the graph router. It will automatically create all router nodes necessary to get to the
        * final path. For example /api/v3/auth will assure node api, v3 and auth get created if they don't already exist.
@@ -113,28 +132,30 @@ namespace suspiria {
         utility::string_partitioner::for_each(path, [&](auto& route) {
           // If route is a static string.
           if (_is_static(route)) {
-            if (cursor->static_nodes.find(route) == end(cursor->static_nodes)) {  // create a node if one doesn't exist.
-              cursor->add_node(route, std::make_shared<RouterNode<T>>());
+            if (auto static_node = cursor->get_static_node(route))
+              cursor = static_node.get();
+            else {
+              auto new_node = new RouterNode<T>();
+              cursor->add_node(route, std::shared_ptr<RouterNode<T>>(new_node));
+              cursor = new_node;
             }
-            cursor = cursor->static_nodes[route].get();
             return;
           }
 
           // If route is dynamic and needs to create a matcher.
           std::string matcher_name;
-          std::vector<std::string> args;
+          RouteMatcherParams args;
           if (_parse_dynamic_route(route, matcher_name, args)) {  // try to parse the route as a dynamic route format.
-            auto matcher = route_matcher_factory.get_factory(matcher_name).make_unique(args);
-            auto matcher_it = std::find_if(begin(cursor->dynamic_nodes), end(cursor->dynamic_nodes), [&](auto& item) {
-              return *item.matcher == *matcher;
-            });
-            if (matcher_it != end(cursor->dynamic_nodes)) {
-              cursor = matcher_it->node.get();
-            } else {
+            auto hash = std::hash<std::string>()(route);  // make a hash of the route.
+            if (auto dynamic_node = cursor->get_dynamic_node(hash))
+              cursor = dynamic_node.get();
+            else {
+              auto matcher = aliases[matcher_name](std::move(args));
               auto new_node = new RouterNode<T>();
-              cursor->add_node(std::move(matcher), std::shared_ptr<RouterNode<T>>(new_node));
+              cursor->add_node(hash, std::move(matcher), std::shared_ptr<RouterNode<T>>(new_node));
               cursor = new_node;
             }
+            return;
           } else {
             // route is invalid format. raise exception
             throw 25;

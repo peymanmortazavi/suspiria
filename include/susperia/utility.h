@@ -41,37 +41,6 @@ namespace suspiria {
     };
 
 
-    template<typename Base, typename ...Args>
-    struct Maker {
-      virtual Base* make(Args && ...args) = 0;
-      virtual std::unique_ptr<Base> make_unique(Args && ...args) = 0;
-      virtual std::shared_ptr<Base> make_shared(Args && ...args) = 0;
-    };
-
-    template <typename T, typename Base, typename ...Args>
-    struct TemplateMaker : Maker<Base, Args...> {
-      Base* make(Args && ...args) override { return new T(std::forward<Args>(args)...); }
-      std::unique_ptr<Base> make_unique(Args && ...args) override { return std::make_unique<T>(std::forward<Args>(args)...); }
-      std::shared_ptr<Base> make_shared(Args && ...args) override { return std::make_shared<T>(std::forward<Args>(args)...); }
-    };
-
-    template<typename Base, typename ...Args>
-    struct factory {
-      typedef Maker<Base, Args...> MakerType;
-
-      template<class T>
-      void add(const std::string& name) {
-        this->_storage[name] = std::make_unique<TemplateMaker<T, Base, Args...>>();
-      }
-
-      MakerType& get_factory(const std::string& name) {
-        return *this->_storage[name];
-      }
-
-    private:
-      std::map<std::string, std::unique_ptr<MakerType>> _storage;
-    };
-
     /**
      * String splitter used to split text.
      */
