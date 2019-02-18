@@ -75,23 +75,23 @@ namespace suspiria {
     /** GraphRouter comes with a fleet of specialty classes that accommodate graph routing, a fast generic routing tool.
      */
     template<class T>
-    class router_node {
+    class RouterNode {
     public:
       struct route_matcher_pair {
         std::unique_ptr<RouteMatcher> matcher;
-        std::shared_ptr<router_node> node;
+        std::shared_ptr<RouterNode> node;
       };
 
       std::string name;
-      std::map<std::string, std::shared_ptr<router_node>> static_nodes;
+      std::map<std::string, std::shared_ptr<RouterNode>> static_nodes;
       std::vector<route_matcher_pair> dynamic_nodes;
       std::shared_ptr<T> handler = nullptr;
 
-      void add_node(std::string name, std::shared_ptr<router_node> node) {
+      void add_node(std::string name, std::shared_ptr<RouterNode> node) {
           this->static_nodes[std::move(name)] = std::move(node);
       }
 
-      void add_node(std::unique_ptr<RouteMatcher>&& resolver, std::shared_ptr<router_node> node) {
+      void add_node(std::unique_ptr<RouteMatcher>&& resolver, std::shared_ptr<RouterNode> node) {
           this->dynamic_nodes.emplace_back(route_matcher_pair{std::move(resolver), std::move(node)});
       }
     };
@@ -99,7 +99,7 @@ namespace suspiria {
     template<class T>
     class GraphRouter : public Router<T> {
     public:
-      router_node<T> root;
+      RouterNode<T> root;
 
       /**
        * Adds a new route to the graph router. It will automatically create all router nodes necessary to get to the
@@ -109,14 +109,14 @@ namespace suspiria {
        * @param name A friendly name for this router node, you can easily get this node back by using this name.
        * @return The newly created or updated router_node<T>
        */
-      router_node<T>& add_route(const std::string& path, std::shared_ptr<T> handler, const std::string& name="") {
+      RouterNode<T>& add_route(const std::string& path, std::shared_ptr<T> handler, const std::string& name="") {
         auto cursor = &this->root;
         utility::string_partitioner::for_each(path, [&](auto& route) {
           // If route is a static string.
           if (_is_static(route)) {
             auto map_it = cursor->static_nodes.find(route);
             if (map_it == end(cursor->static_nodes)) {  // create a node if one doesn't exist.
-              cursor->add_node(route, std::make_shared<router_node<T>>());
+              cursor->add_node(route, std::make_shared<RouterNode<T>>());
             }
             cursor = cursor->static_nodes[route].get();
             return;
@@ -133,8 +133,8 @@ namespace suspiria {
             if (matcher_it != end(cursor->dynamic_nodes)) {
               cursor = matcher_it->node.get();
             } else {
-              auto new_node = new router_node<T>();
-              cursor->add_node(std::move(matcher), std::shared_ptr<router_node<T>>(new_node));
+              auto new_node = new RouterNode<T>();
+              cursor->add_node(std::move(matcher), std::shared_ptr<RouterNode<T>>(new_node));
               cursor = new_node;
             }
           } else {
@@ -149,7 +149,7 @@ namespace suspiria {
 
       ResolveResult<T> resolve(const std::string &path) const override {
         ResolveResult<T> result{};
-        const router_node<T>* head = &this->root;
+        const RouterNode<T>* head = &this->root;
         utility::string_partitioner it{path};
         std::string route;
         while (it.next(route)) {
@@ -185,7 +185,7 @@ namespace suspiria {
         return false;
       }
 
-      const router_node<T> * _resolve(const router_node<T>* head, const std::string& route, RouterParams& params) const {
+      const RouterNode<T> * _resolve(const RouterNode<T>* head, const std::string& route, RouterParams& params) const {
           // First try the fast hash map approach for static static_nodes.
           const auto& map_it = head->static_nodes.find(route);
           if (map_it != end(head->static_nodes)) {
