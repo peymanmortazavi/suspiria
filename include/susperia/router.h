@@ -244,7 +244,7 @@ namespace suspiria {
         return cursor;
       }
 
-      const RouterNode<T> * _resolve(const RouterNode<T>* head, const std::string& route, RouterParams& params) const {
+      const RouterNode<T> * _resolve(const RouterNode<T>*& head, const std::string& route, RouterParams& params) const {
           // First try the fast hash map approach for static static_nodes.
           const auto& map_it = head->static_nodes.find(route);
           if (map_it != end(head->static_nodes)) {
