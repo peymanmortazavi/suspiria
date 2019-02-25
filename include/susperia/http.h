@@ -6,6 +6,7 @@
 #define SUSPIRIA_HTTP_H
 
 #include <sstream>
+#include <unordered_map>
 
 #include <mongoose/mongoose.h>
 
@@ -24,7 +25,7 @@ namespace suspiria {
 
     class HttpResponse {
     public:
-      std::map<std::string, std::string> headers;
+      std::unordered_map<std::string, std::string> headers;
       HttpStatus status = HttpStatus::OK;
       std::stringstream writer;
 

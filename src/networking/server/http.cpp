@@ -2,7 +2,7 @@
 // Created by Peyman Mortazavi on 2019-02-07.
 //
 
-#include <map>
+#include <unordered_map>
 #include <string>
 #include <sstream>
 #include <iostream>
@@ -14,7 +14,7 @@ using namespace std;
 using namespace suspiria::networking;
 
 
-map<int, string> msgs = {
+unordered_map<int, string> msgs = {
   {MG_EV_WEBSOCKET_FRAME, "WebSocket Frame"},
   {MG_EV_WEBSOCKET_CONTROL_FRAME, "WebSocket Control Frame"},
   {MG_EV_WEBSOCKET_HANDSHAKE_DONE, "WebSocket Handshake Done"},
@@ -26,7 +26,7 @@ map<int, string> msgs = {
   {MG_EV_SEND, "Connection Sent Socket Data"},
 };
 
-std::map<HttpStatus, std::string> status_text_map = {
+std::unordered_map<HttpStatus, std::string> status_text_map = {
   {HttpStatus::OK, "OK"},
   {HttpStatus::BadRequest, "Bad Request"},
   {HttpStatus::NotFound, "Not Found"},
