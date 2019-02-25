@@ -32,35 +32,7 @@ std::unordered_map<HttpStatus, std::string> status_text_map = {
   {HttpStatus::NotFound, "Not Found"},
 };
 
-const string endh = "\r\n";
-
-
-string HttpResponse::flush() {
-  stringstream content;
-  content << "HTTP/1.1 " << this->status << " " << status_text_map[this->status] << endh;
-  this->headers["Server"] = "IpecacServer/1.0";
-  for (const auto& item : headers) {
-    content << item.first << ": " << item.second << endh;
-  }
-  auto data = writer.str();
-  content << "Content-Length: " << data.size() << endh;
-  content << endh << data << endh;
-  return content.str();
-}
-
-string create_response_header(HttpResponse& response) {
-  stringstream output_writer;
-  output_writer << "HTTP/1.1 " << response.status << " " << status_text_map[response.status] << endh;
-
-  // Update headers.
-  if (response.headers["Server"].empty()) { response.headers["Server"] = "Suspiria"; }
-  for (const auto& item : response.headers) {
-    output_writer << item.first << ": " << item.second << endh;
-  }
-  output_writer << endh;
-  return output_writer.str();
-}
-
+string endh = "\r\n";
 
 static void handle_mg_event(struct mg_connection* connection, int event, void* data) {
   if (event == MG_EV_POLL) return;
@@ -71,19 +43,18 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       auto request = (http_message*) data;
       auto uri = string(request->uri.p, request->uri.len);
       auto result = server->get_router().resolve(uri);
-      HttpResponse response;
+      stringstream output;
+      std::unique_ptr<HttpResponse> response;
       if (result.matched) {
-        auto http_request = HttpRequest{result.params};
+        auto http_request = HttpRequest{result.params, output};
         response = result.handler->handle(http_request);
       } else {
-        response = HttpResponse();
-        response.status = HttpStatus::NotFound;
-        response.writer << "No Handler For " << uri;
+        response = move(make_unique<HttpResponse>(HttpStatus::NotFound));
+//        response.status = HttpStatus::NotFound;
+//        response.writer << "No Handler For " << uri;
       }
-      auto content = response.writer.str();
-      response.headers["Content-Length"] = to_string(content.size());
-      auto header = create_response_header(response);
-      mg_send(connection, header.c_str(), (int)header.size());
+      response->write(output);
+      auto content = output.str();
       mg_send(connection, content.c_str(), (int)content.size());
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
@@ -118,4 +89,32 @@ void WebSocketServer::stop() {
 
 WebSocketServer::~WebSocketServer() {
   mg_mgr_free(&this->_manager);
+}
+
+
+HttpRequest::HttpRequest(RouterParams &params, ostream &response_stream) : url_params(params), _response_stream(response_stream) {}
+
+
+void HttpResponse::write_header(ostream& output) {
+  output << "HTTP/1.1 " << status << " " << status_text_map[status] << endh;
+  if (headers.find("Server") == end(headers)) { headers.emplace("Server", "Suspiria"); }
+  for (const auto& item : headers) {
+    output << item.first << ": " << item.second << endh;
+  }
+  output << endh;
+}
+
+void HttpResponse::write(std::ostream &output) {
+  headers.emplace("Content-Length", "0");
+  this->write_header(output);
+}
+
+
+TextResponse::TextResponse(string &&content, HttpStatus status) : _content(move(content)), HttpResponse(status) {}
+
+void TextResponse::write(std::ostream &output) {
+  headers["Content-Length"] = to_string(_content.size());
+  if (headers.find("Content-Type") == end(headers)) { headers.emplace("Content-Type", "text/plain"); }
+  this->write_header(output);
+  output << _content;
 }

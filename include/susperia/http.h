@@ -5,12 +5,14 @@
 #ifndef SUSPIRIA_HTTP_H
 #define SUSPIRIA_HTTP_H
 
+#include <ostream>
 #include <sstream>
 #include <unordered_map>
 
 #include <mongoose/mongoose.h>
 
 #include <susperia/router.h>
+#include "router.h"
 
 
 namespace suspiria {
@@ -23,24 +25,40 @@ namespace suspiria {
       BadRequest = 400,
     };
 
+    class HttpRequest {
+    public:
+      explicit HttpRequest(RouterParams& params, std::ostream& response_stream);
+      RouterParams& url_params;
+
+    private:
+      std::ostream& _response_stream;
+
+      friend class HttpResponse;
+    };
+
     class HttpResponse {
     public:
+      explicit HttpResponse(HttpStatus status = HttpStatus::OK) : status(status) {}
       std::unordered_map<std::string, std::string> headers;
-      HttpStatus status = HttpStatus::OK;
-      std::stringstream writer;
+      HttpStatus status;
 
-      std::string flush();
+      virtual void write(std::ostream& output);
+
+    protected:
+      void write_header(std::ostream& output);
     };
 
-
-    struct HttpRequest {
-      RouterParams& url_params;
+    class TextResponse : public HttpResponse {
+    public:
+      explicit TextResponse(std::string&& content, HttpStatus status = HttpStatus::OK);
+      void write(std::ostream& output) override;
+    private:
+      std::string _content;
     };
-
 
     class HttpRequestHandler {
     public:
-      virtual HttpResponse handle(HttpRequest& request) = 0;
+      virtual std::unique_ptr<HttpResponse> handle(HttpRequest& request) = 0;
     };
 
     class WebSocketServer {
