@@ -34,6 +34,9 @@ TEST_F(Networking_RouterTests, EmptyRouter) {
   ASSERT_EQ(result.matched, false);
   ASSERT_EQ(result.handler, nullptr);
   ASSERT_EQ(result.params.empty(), true);
+
+  router->add_route("", make_shared<int>(2));
+  assert_has_handler(router->resolve("/"), 2);
 }
 
 TEST_F(Networking_RouterTests, SlashVariations) {
