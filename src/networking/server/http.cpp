@@ -34,6 +34,35 @@ std::unordered_map<HttpStatus, std::string> status_text_map = {
 
 string endh = "\r\n";
 
+class mg_streambuf : public streambuf {
+public:
+  mg_connection* connection;
+  char* buffer = nullptr;
+
+  explicit mg_streambuf(mg_connection* connection, size_t buffer_size) : connection(connection) {
+    buffer = new char[buffer_size + 1];
+    setp(buffer, buffer + buffer_size - 1);
+  }
+
+protected:
+  int_type overflow(int_type __c) override {
+    if (__c != traits_type::eof()) {
+      *pptr() = __c;
+      pbump(1);
+      sync();
+      return __c;
+    }
+    return traits_type::eof();
+  }
+
+  int_type sync() override {
+    auto n = int(pptr() - pbase());
+    pbump(-n);
+    mg_send(connection, pbase(), n);
+    return 0;
+  }
+};
+
 static void handle_mg_event(struct mg_connection* connection, int event, void* data) {
   if (event == MG_EV_POLL) return;
   // cout << "Event: " << msgs[event] << endl;
@@ -43,19 +72,16 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       auto request = (http_message*) data;
       auto uri = string(request->uri.p, request->uri.len);
       auto result = server->get_router().resolve(uri);
-      stringstream output;
+      ostream output{new mg_streambuf(connection, 1024)};
       std::unique_ptr<HttpResponse> response;
       if (result.matched) {
         auto http_request = HttpRequest{result.params, output};
         response = result.handler->handle(http_request);
       } else {
-        response = move(make_unique<HttpResponse>(HttpStatus::NotFound));
-//        response.status = HttpStatus::NotFound;
-//        response.writer << "No Handler For " << uri;
+        response = move(make_unique<TextResponse>("No Handler for " + uri, HttpStatus::NotFound));
       }
       response->write(output);
-      auto content = output.str();
-      mg_send(connection, content.c_str(), (int)content.size());
+      output.flush();
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
