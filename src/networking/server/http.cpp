@@ -112,7 +112,8 @@ void StreamingResponse::prepare(HttpRequest &request, const function<void(std::o
   try {
     request._response_stream.rdbuf(temp_buffer);
     write_func(request._response_stream);
-    request._response_stream.flush();
+    request._response_stream.flush();  // flush to actually empty the buffer.
+    request._response_stream.flush();  // flush to send 0 byte message indicating end of the stream.
   } catch(...) {
     request._response_stream.rdbuf(original_buffer);
     delete temp_buffer;
