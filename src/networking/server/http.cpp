@@ -108,7 +108,7 @@ void StreamingResponse::prepare(HttpRequest &request, const function<void(std::o
   this->write_header(request._response_stream);
   request._response_stream.flush();
   auto* original_buffer = request._response_stream.rdbuf();
-  auto* temp_buffer = new mg_chunked_streambuf{&request._connection, 2};
+  auto* temp_buffer = new mg_chunked_streambuf{&request._connection, 8192};
   try {
     request._response_stream.rdbuf(temp_buffer);
     write_func(request._response_stream);
