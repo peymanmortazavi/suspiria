@@ -146,7 +146,7 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       }
       response->write(suspiria_output_stream);
       suspiria_output_stream.flush();
-      connection->flags |= MG_F_SEND_AND_CLOSE;
+      // connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
 }
