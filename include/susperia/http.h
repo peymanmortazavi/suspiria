@@ -8,6 +8,7 @@
 #include <ostream>
 #include <sstream>
 #include <unordered_map>
+#include <functional>
 
 #include <mongoose/mongoose.h>
 
@@ -27,13 +28,14 @@ namespace suspiria {
 
     class HttpRequest {
     public:
-      explicit HttpRequest(RouterParams& params, std::ostream& response_stream);
+      explicit HttpRequest(RouterParams& params, mg_connection& connection, std::ostream& response_stream);
       RouterParams& url_params;
 
     private:
       std::ostream& _response_stream;
+      mg_connection& _connection;
 
-      friend class HttpResponse;
+      friend class StreamingResponse;
     };
 
     class HttpResponse {
@@ -54,6 +56,12 @@ namespace suspiria {
       void write(std::ostream& output) override;
     private:
       std::string _content;
+    };
+
+    class StreamingResponse : public HttpResponse {
+    public:
+      void prepare(HttpRequest& request, const std::function<void(std::ostream&)>& write_func);
+      void write(std::ostream& output) override { }
     };
 
     class HttpRequestHandler {

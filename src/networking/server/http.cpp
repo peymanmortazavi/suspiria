@@ -47,7 +47,7 @@ public:
 protected:
   int_type overflow(int_type __c) override {
     if (__c != traits_type::eof()) {
-      *pptr() = __c;
+      *pptr() = traits_type::to_char_type(__c);
       pbump(1);
       sync();
       return __c;
@@ -56,12 +56,75 @@ protected:
   }
 
   int_type sync() override {
-    auto n = int(pptr() - pbase());
-    pbump(-n);
-    mg_send(connection, pbase(), n);
+    auto length = distance(pbase(), pptr());
+    pbump(-length);
+    connection->iface->vtable->tcp_send(connection, pbase(), length);
     return 0;
   }
 };
+
+class mg_chunked_streambuf : public streambuf {
+public:
+  mg_connection* connection;
+  char* buffer = nullptr;
+  char hex_holder[5];
+  int max_length;
+
+  explicit mg_chunked_streambuf(mg_connection* connection, size_t buffer_size) : connection(connection) {
+    max_length = sprintf(hex_holder, "%lx", buffer_size);
+    buffer = new char[buffer_size + max_length + 5];
+    buffer[max_length] = '\r';
+    buffer[max_length + 1] = '\n';
+    setp(buffer + max_length + 2, buffer + buffer_size + max_length + 5);
+  }
+
+protected:
+  traits_type::int_type overflow(traits_type::int_type __c) override {
+    if (__c != traits_type::eof()) {
+      *pptr() = traits_type::to_char_type(__c);
+      pbump(1);
+      sync();
+      return __c;
+    }
+    return traits_type::eof();
+  }
+
+  traits_type::int_type sync() override {
+    auto length = distance(pbase(), pptr());
+    pbump(-length);
+    pbase()[length] = '\r';
+    pbase()[length + 1] = '\n';
+    auto count = sprintf(hex_holder, "%lx", length);
+    auto offset = max_length - count;
+    memcpy(buffer + offset, hex_holder, count);
+    connection->iface->vtable->tcp_send(connection, buffer + offset, count + length + 4);
+    return 0;
+  }
+};
+
+
+void StreamingResponse::prepare(HttpRequest &request, const function<void(std::ostream&)>& write_func) {
+  headers.emplace("Transfer-Encoding", "chunked");
+  this->write_header(request._response_stream);
+  request._response_stream.flush();
+  auto* original_buffer = request._response_stream.rdbuf();
+  auto* temp_buffer = new mg_chunked_streambuf{&request._connection, 2};
+  try {
+    request._response_stream.rdbuf(temp_buffer);
+    write_func(request._response_stream);
+    request._response_stream.flush();
+  } catch(...) {
+    request._response_stream.rdbuf(original_buffer);
+    delete temp_buffer;
+    throw;
+  };
+  request._response_stream.rdbuf(original_buffer);
+  delete temp_buffer;
+}
+
+mg_streambuf * output_streambuf = new mg_streambuf(nullptr, 8182);
+ostream suspiria_output_stream{output_streambuf};
+
 
 static void handle_mg_event(struct mg_connection* connection, int event, void* data) {
   if (event == MG_EV_POLL) return;
@@ -72,16 +135,16 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       auto request = (http_message*) data;
       auto uri = string(request->uri.p, request->uri.len);
       auto result = server->get_router().resolve(uri);
-      ostream output{new mg_streambuf(connection, 1024)};
+      output_streambuf->connection = connection;
       std::unique_ptr<HttpResponse> response;
       if (result.matched) {
-        auto http_request = HttpRequest{result.params, output};
+        auto http_request = HttpRequest{result.params, *connection, suspiria_output_stream};
         response = result.handler->handle(http_request);
       } else {
         response = move(make_unique<TextResponse>("No Handler for " + uri, HttpStatus::NotFound));
       }
-      response->write(output);
-      output.flush();
+      response->write(suspiria_output_stream);
+      suspiria_output_stream.flush();
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
@@ -118,7 +181,8 @@ WebSocketServer::~WebSocketServer() {
 }
 
 
-HttpRequest::HttpRequest(RouterParams &params, ostream &response_stream) : url_params(params), _response_stream(response_stream) {}
+HttpRequest::HttpRequest(RouterParams &params, mg_connection& connection, ostream &response_stream)
+  : url_params(params), _response_stream(response_stream), _connection(connection) {}
 
 
 void HttpResponse::write_header(ostream& output) {
