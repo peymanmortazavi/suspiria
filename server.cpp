@@ -51,7 +51,7 @@ void start_server() {
   router->add_route("/", make_shared<IndexHandler>());
   router->add_route("/loop", make_shared<StreamingHandler>());
 
-  WebSocketServer server{"0.0.0.0:5000", router};
+  WebSocketServer server{"0.0.0.0:1500", router};
   server.polling_timeout = 200;
   server.start();
 }
