@@ -78,6 +78,13 @@ public:
     setp(buffer + max_length + 2, buffer + buffer_size + max_length + 5);
   }
 
+  /**
+   * Returns true if there is some data available in the buffer that needs to be flushed.
+   */
+  bool needs_flush() const {
+    return pptr() != pbase();
+  }
+
 protected:
   traits_type::int_type overflow(traits_type::int_type __c) override {
     if (__c != traits_type::eof()) {
@@ -112,7 +119,9 @@ void StreamingResponse::prepare(HttpRequest &request, const function<void(std::o
   try {
     request._response_stream.rdbuf(temp_buffer);
     write_func(request._response_stream);
-    request._response_stream.flush();  // flush to actually empty the buffer.
+    if (temp_buffer->needs_flush()) {
+      request._response_stream.flush();  // flush to actually empty the buffer.
+    }
     request._response_stream.flush();  // flush to send 0 byte message indicating end of the stream.
   } catch(...) {
     request._response_stream.rdbuf(original_buffer);
@@ -146,7 +155,7 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       }
       response->write(suspiria_output_stream);
       suspiria_output_stream.flush();
-      // connection->flags |= MG_F_SEND_AND_CLOSE;
+      connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
 }
