@@ -34,6 +34,33 @@ std::unordered_map<HttpStatus, std::string> status_text_map = {
 
 string endh = "\r\n";
 
+class mg_response_streambuf : public streambuf {
+public:
+  explicit mg_response_streambuf(mg_str& buffer) : begin_(buffer.p), end_(buffer.p + buffer.len), current_(buffer.p) {}
+
+protected:
+  int uflow() override {
+    if (current_ == end_)
+      return traits_type::eof();
+    return traits_type::to_int_type(*current_++);
+  }
+
+  streamsize showmanyc() override {
+    return end_ - current_;
+  }
+
+  int underflow() override {
+    if (current_ == end_)
+      return traits_type::eof();
+    return traits_type::to_int_type(*current_);
+  }
+
+private:
+  const char* begin_;
+  const char* end_;
+  const char* current_;
+};
+
 class mg_streambuf : public streambuf {
 public:
   mg_connection* connection;
@@ -146,15 +173,18 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       auto uri = string(request->uri.p, request->uri.len);
       auto result = server->get_router().resolve(uri);
       output_streambuf->connection = connection;
+      auto receive_buffer = new mg_response_streambuf(request->body);
+      auto input_stream = istream(receive_buffer);
       std::unique_ptr<HttpResponse> response;
       if (result.matched) {
-        auto http_request = HttpRequest{result.params, *connection, suspiria_output_stream};
+        auto http_request = HttpRequest{result.params, *connection, suspiria_output_stream, input_stream};
         response = result.handler->handle(http_request);
       } else {
         response = move(make_unique<TextResponse>("No Handler for " + uri, HttpStatus::NotFound));
       }
       response->write(suspiria_output_stream);
       suspiria_output_stream.flush();
+      delete receive_buffer;
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
@@ -191,8 +221,8 @@ WebSocketServer::~WebSocketServer() {
 }
 
 
-HttpRequest::HttpRequest(RouterParams &params, mg_connection& connection, ostream &response_stream)
-  : url_params(params), _response_stream(response_stream), _connection(connection) {}
+HttpRequest::HttpRequest(RouterParams &params, mg_connection& connection, ostream &response_stream, istream &input_stream)
+  : url_params(params), _response_stream(response_stream), _connection(connection), body(input_stream) {}
 
 
 void HttpResponse::write_header(ostream& output) {

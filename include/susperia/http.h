@@ -5,7 +5,7 @@
 #ifndef SUSPIRIA_HTTP_H
 #define SUSPIRIA_HTTP_H
 
-#include <ostream>
+#include <iostream>
 #include <sstream>
 #include <unordered_map>
 #include <functional>
@@ -28,8 +28,9 @@ namespace suspiria {
 
     class HttpRequest {
     public:
-      explicit HttpRequest(RouterParams& params, mg_connection& connection, std::ostream& response_stream);
+      explicit HttpRequest(RouterParams& params, mg_connection& connection, std::ostream& response_stream, std::istream& input_stream);
       RouterParams& url_params;
+      std::istream& body;
 
     private:
       std::ostream& _response_stream;
