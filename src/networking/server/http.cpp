@@ -185,6 +185,7 @@ static void handle_mg_event(struct mg_connection* connection, int event, void* d
       response->write(suspiria_output_stream);
       suspiria_output_stream.flush();
       delete receive_buffer;
+      mbuf_remove(&connection->recv_mbuf, connection->recv_mbuf.len);
       connection->flags |= MG_F_SEND_AND_CLOSE;
       break;
   }
