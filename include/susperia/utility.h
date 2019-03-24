@@ -46,7 +46,7 @@ namespace suspiria {
      */
     class string_partitioner {
     public:
-      explicit string_partitioner(const std::string& text, char separator='/') : _text(text), _separator(separator) {}
+      explicit string_partitioner(const std::string& text, char separator='/') : text_(text), separator_(separator) {}
       bool next(std::string& word);
       template<typename T> static void for_each(const std::string& text, T func, char separator='/') {
         string_partitioner it{text, separator};
@@ -55,10 +55,10 @@ namespace suspiria {
       }
 
     private:
-      const std::string& _text;
-      char _separator;
-      unsigned long _start = 0;
-      unsigned long _count = 0;
+      const std::string& text_;
+      char separator_;
+      unsigned long start_ = 0;
+      unsigned long count_ = 0;
     };
 
   }
