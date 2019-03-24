@@ -28,6 +28,15 @@ public:
 };
 
 
+class EchoHandler : public HttpRequestHandler {
+public:
+  unique_ptr<HttpResponse> handle(HttpRequest &request) override {
+    string body{istreambuf_iterator<char>(request.body.rdbuf()), {}};
+    return make_unique<TextResponse>(move(body));
+  }
+};
+
+
 struct StreamingHandler : public HttpRequestHandler {
   unique_ptr<HttpResponse> handle(HttpRequest &request) override {
     auto response = make_unique<StreamingResponse>();
@@ -49,6 +58,7 @@ void start_server() {
 
   auto router = make_shared<GraphRouter<HttpRequestHandler>>();
   router->add_route("/", make_shared<IndexHandler>());
+  router->add_route("/echo", make_shared<EchoHandler>());
   router->add_route("/loop", make_shared<StreamingHandler>());
 
   WebSocketServer server{"0.0.0.0:1500", router};
