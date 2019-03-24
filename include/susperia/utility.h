@@ -44,7 +44,8 @@ namespace suspiria {
     /**
      * String splitter used to split text.
      */
-    struct string_partitioner {
+    class string_partitioner {
+    public:
       explicit string_partitioner(const std::string& text, char separator='/') : _text(text), _separator(separator) {}
       bool next(std::string& word);
       template<typename T> static void for_each(const std::string& text, T func, char separator='/') {
