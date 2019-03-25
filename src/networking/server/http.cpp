@@ -8,7 +8,7 @@
 #include <iostream>
 #include <fstream>
 
-#include <susperia/internal/http.h>
+#include <susperia/internal/networking/http.h>
 
 using namespace std;
 using namespace suspiria::networking;

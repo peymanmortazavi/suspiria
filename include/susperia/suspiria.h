@@ -6,8 +6,9 @@
 #define SUSPIRIA_SUSPIRIA_H
 
 #include "internal/exceptions.h"
-#include "internal/router.h"
-#include "internal/http.h"
 #include "internal/utility.h"
+
+#include "internal/networking/router.h"
+#include "internal/networking/http.h"
 
 #endif //SUSPIRIA_SUSPIRIA_H

@@ -2,7 +2,7 @@
 // Created by Peyman Mortazavi on 2019-02-11.
 //
 
-#include <susperia/internal/router.h>
+#include <susperia/internal/networking/router.h>
 
 using namespace std;
 using namespace suspiria::networking;

@@ -15,7 +15,7 @@
 #include <vector>
 #include <functional>
 
-#include "utility.h"
+#include <susperia/internal/utility.h>
 
 
 namespace suspiria {
