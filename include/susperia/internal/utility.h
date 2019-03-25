@@ -5,7 +5,7 @@
 #ifndef SUSPIRIA_UTILITY_H
 #define SUSPIRIA_UTILITY_H
 
-#include <map>
+#include <unordered_map>
 #include <memory>
 #include <string>
 
@@ -43,7 +43,7 @@ namespace suspiria {
 
     private:
       bool allow_overrides_;
-      std::map<std::string, T> storage_;
+      std::unordered_map<std::string, T> storage_;
     };
 
 
