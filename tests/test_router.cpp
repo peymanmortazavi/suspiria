@@ -6,7 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include <susperia/router.h>
+#include <susperia/suspiria.h>
 
 
 using namespace std;
@@ -69,7 +69,7 @@ TEST_F(Networking_RouterTests, AddRouteWithNode) {
   auto conflict_router = make_unique<GraphRouter<int>>();
   conflict_router->add_route("/safe_merge1", make_shared<int>(1));
   conflict_router->add_route("/bad_merge1", make_shared<int>(1));
-  conflict_router->add_route("/<var:pk>", make_shared<int>(2));
+  conflict_router->add_route("/<:pk>", make_shared<int>(2));
 
   auto& new_node = router->add_route("/admin/", admin_router->get_root());
   auto info_node = make_shared<RouterNode<int>>();

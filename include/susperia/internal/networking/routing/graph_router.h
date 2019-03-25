@@ -45,8 +45,8 @@ namespace suspiria {
       static std::shared_ptr<RegexRouteMatcher> create_from_args(RouteMatcherArgs&& args);
 
     private:
-      std::regex _rule;
-      std::vector<std::string> _names;
+      std::regex pattern_;
+      std::vector<std::string> names_;
     };
 
     /**
@@ -54,10 +54,10 @@ namespace suspiria {
      */
     class VariableRouteMatcher : public RouteMatcher {
     public:
-      explicit VariableRouteMatcher(std::string name) : _name(std::move(name)) {}
+      explicit VariableRouteMatcher(std::string name) : name_(std::move(name)) {}
 
       bool match(const std::string &route, RouterParams &params) const noexcept override {
-        params[_name] = route;
+        params[name_] = route;
         return true;
       }
 
@@ -67,7 +67,7 @@ namespace suspiria {
       }
 
     private:
-      std::string _name;
+      std::string name_;
     };
 
     /** GraphRouter comes with a fleet of specialty classes that accommodate graph routing, a fast generic routing tool.
@@ -114,7 +114,7 @@ namespace suspiria {
 
       GraphRouter() {
         // Register the basic route matchers.
-        this->add_route_matcher_alias("var", &VariableRouteMatcher::create_from_args);
+        this->add_route_matcher_alias("", &VariableRouteMatcher::create_from_args);
         this->add_route_matcher_alias("regex", &RegexRouteMatcher::create_from_args);
       };
 

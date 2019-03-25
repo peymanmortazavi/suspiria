@@ -10,8 +10,7 @@
 
 #include <gtest/gtest.h>
 
-#include <susperia/utility.h>
-#include <susperia/exceptions.h>
+#include <susperia/suspiria.h>
 
 
 using namespace std;

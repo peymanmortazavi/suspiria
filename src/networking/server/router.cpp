@@ -9,20 +9,20 @@ using namespace suspiria::networking;
 
 
 RegexRouteMatcher::RegexRouteMatcher(const std::string &pattern, std::vector<std::string>&& capture_names) {
-  this->_rule = regex {pattern, regex_constants::ECMAScript | regex_constants::optimize};
-  this->_names = move(capture_names);
+  this->pattern_ = regex {pattern, regex_constants::ECMAScript | regex_constants::optimize};
+  this->names_ = move(capture_names);
 }
 
 RegexRouteMatcher::RegexRouteMatcher(const std::string &pattern, const std::vector<std::string>& capture_names) {
-  this->_rule = regex {pattern, regex_constants::ECMAScript | regex_constants::optimize};
-  this->_names = capture_names;
+  this->pattern_ = regex {pattern, regex_constants::ECMAScript | regex_constants::optimize};
+  this->names_ = capture_names;
 }
 
 bool RegexRouteMatcher::match(const string &route, RouterParams &params) const noexcept {
   smatch results;
-  if (regex_match(route, results, _rule)) {
+  if (regex_match(route, results, pattern_)) {
     for (unsigned long index = 1; index < results.size(); index++) {
-      params[_names[index-1]] = results.str(index);
+      params[names_[index-1]] = results.str(index);
     }
     return true;
   }
