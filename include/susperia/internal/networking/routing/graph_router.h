@@ -122,7 +122,7 @@ namespace suspiria {
       };
 
       RouterNode<T>& add_route(const std::string& path, const RouterNode<T>& node, const std::string& name="") {
-        auto new_root = this->_mk_route(path);
+        auto new_root = this->mk_route(path);
         new_root->handler = node.handler;
         new_root->static_nodes.insert(begin(node.static_nodes), end(node.static_nodes));
         std::copy(begin(node.dynamic_nodes), end(node.dynamic_nodes), std::back_inserter(new_root->dynamic_nodes));
@@ -138,7 +138,7 @@ namespace suspiria {
        * @return The newly created or updated router_node<T>
        */
       RouterNode<T>& add_route(const std::string& path, std::shared_ptr<T> handler, const std::string& name="") {
-        auto node = this->_mk_route(path);
+        auto node = this->mk_route(path);
         node->handler = move(handler);
         node->name = name;
         return *node;
@@ -152,11 +152,11 @@ namespace suspiria {
        */
       ResolveResult<T> resolve(const std::string &path) const override {
         ResolveResult<T> result{};
-        const RouterNode<T>* head = &this->_root;
+        const RouterNode<T>* head = &this->root_;
         utility::string_partitioner it{path};
         std::string route;
         while (it.next(route)) {
-          if(auto node = _resolve(head, route, result.params)) {
+          if(auto node = this->resolve(head, route, result.params)) {
             head = node;
           } else {
             return result;
@@ -181,18 +181,18 @@ namespace suspiria {
         this->matcher_factory_registry_.add(std::move(alias), std::move(builder));
       }
 
-      RouterNode<T>& get_root() noexcept { return _root; }
+      RouterNode<T>& get_root() noexcept { return root_; }
 
     private:
       utility::registry<RouteMatcherBuilder> matcher_factory_registry_;  // a registry for factories that make matchers.
-      RouterNode<T> _root;
+      RouterNode<T> root_;
 
-      bool _is_static(const std::string& route) {
+      bool is_static_route(const std::string &route) {
         std::regex static_node_matcher{R"(^[\w\d]*$)", std::regex_constants::ECMAScript | std::regex_constants::icase};
         return std::regex_match(route, static_node_matcher);
       }
 
-      bool _parse_dynamic_route(const std::string& route, std::string& matcher_name, std::vector<std::string>& args) {
+      bool parse_dynamic_route(const std::string &route, std::string &matcher_name, std::vector<std::string> &args) {
         std::regex dynamic_node_matcher{R"(^<([\w\d]*)((?::[\d\w!@#$%^&*()~\\,-]*)*)>$)", std::regex_constants::ECMAScript};
         std::smatch match_result;
         if (std::regex_match(route, match_result, dynamic_node_matcher)) {
@@ -205,11 +205,11 @@ namespace suspiria {
         return false;
       }
 
-      RouterNode<T>* _mk_route(const std::string& path) {
-        auto cursor = &this->_root;
+      RouterNode<T>* mk_route(const std::string &path) {
+        auto cursor = &this->root_;
         utility::string_partitioner::for_each(path, [&](auto& route) {
           // If route is a static string.
-          if (_is_static(route)) {
+          if (is_static_route(route)) {
             if (auto static_node = cursor->get_static_node(route))
               cursor = static_node.get();
             else {
@@ -223,7 +223,7 @@ namespace suspiria {
           // If route is dynamic and needs to create a matcher.
           std::string matcher_name;
           RouteMatcherArgs args;
-          if (_parse_dynamic_route(route, matcher_name, args)) {  // try to parse the route as a dynamic route format.
+          if (parse_dynamic_route(route, matcher_name, args)) {  // try to parse the route as a dynamic route format.
             auto hash = std::hash<std::string>()(route);  // make a hash of the route.
             if (auto dynamic_node = cursor->get_dynamic_node(hash))
               cursor = dynamic_node.get();
@@ -242,7 +242,7 @@ namespace suspiria {
         return cursor;
       }
 
-      const RouterNode<T> * _resolve(const RouterNode<T>*& head, const std::string& route, RouterParams& params) const {
+      const RouterNode<T> * resolve(const RouterNode<T> *&head, const std::string &route, RouterParams &params) const {
         // First try the fast hash map approach for static static_nodes.
         const auto& map_it = head->static_nodes.find(route);
         if (map_it != end(head->static_nodes)) {
@@ -250,7 +250,7 @@ namespace suspiria {
         }
 
         // Now go through all matchers and try to match.
-        const auto& matcher_it = std::find_if(begin(head->dynamic_nodes), end(head->dynamic_nodes), [&route, &params](auto& pair) {
+        const auto& matcher_it = std::find_if(begin(head->dynamic_nodes), end(head->dynamic_nodes), [&](auto& pair) {
           return pair.matcher->match(route, params);
         });
         if (matcher_it != end(head->dynamic_nodes)) {
