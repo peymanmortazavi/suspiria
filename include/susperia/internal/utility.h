@@ -20,24 +20,30 @@ namespace suspiria {
     public:
       explicit registry(bool allow_overrides=false) : allow_overrides_(allow_overrides) {}
 
-      void add(const std::string& name, std::unique_ptr<T>&& obj) {
+      void add(const std::string& name, T obj) {
         if (!allow_overrides_ && storage_.find(name) != end(storage_)) {
           throw RegistryAlreadyExists{name};
         }
         this->storage_[name] = std::move(obj);
       }
 
-      T& get(const std::string& name) const {
+      const T& operator[](const std::string& name) const {
+        if (auto value = this->get(name))
+          return *value;
+        throw RegistryNotFound{name};
+      }
+
+      const T* get(const std::string& name) const {
         const auto& it = this->storage_.find(name);
         if (it != end(this->storage_)) {
-          return *it->second;
+          return &it->second;
         }
-        throw RegistryNotFound{name};
+        return nullptr;
       }
 
     private:
       bool allow_overrides_;
-      std::map<std::string, std::unique_ptr<T>> storage_;
+      std::map<std::string, T> storage_;
     };
 
 

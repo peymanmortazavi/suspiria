@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "router.h"
+#include "susperia/internal/utility.h"
 
 namespace suspiria {
 
