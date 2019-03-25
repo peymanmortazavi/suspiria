@@ -12,8 +12,7 @@
 
 #include <mongoose/mongoose.h>
 
-#include <susperia/router.h>
-#include "router.h"
+#include <susperia/internal/router.h>
 
 
 namespace suspiria {

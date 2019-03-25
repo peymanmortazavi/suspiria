@@ -5,9 +5,9 @@
 #ifndef SUSPIRIA_SUSPIRIA_H
 #define SUSPIRIA_SUSPIRIA_H
 
-#include "exceptions.h"
-#include "router.h"
-#include "http.h"
-#include "utility.h"
+#include "internal/exceptions.h"
+#include "internal/router.h"
+#include "internal/http.h"
+#include "internal/utility.h"
 
 #endif //SUSPIRIA_SUSPIRIA_H

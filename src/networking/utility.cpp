@@ -2,7 +2,7 @@
 // Created by Peyman Mortazavi on 2019-02-13.
 //
 
-#include <susperia/utility.h>
+#include <susperia/internal/utility.h>
 
 using namespace std;
 using namespace suspiria::utility;
