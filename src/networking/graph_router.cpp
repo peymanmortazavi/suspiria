@@ -8,13 +8,18 @@ using namespace std;
 using namespace suspiria::networking;
 
 
-RegexRouteMatcher::RegexRouteMatcher(const std::string &pattern, std::vector<std::string>&& capture_names) {
-  this->pattern_ = regex {pattern, regex_constants::ECMAScript | regex_constants::optimize};
+regex create_regex(const string& pattern) {
+  return regex{pattern, regex_constants::ECMAScript | regex_constants::optimize};
+}
+
+
+RegexRouteMatcher::RegexRouteMatcher(const string &pattern, vector<string>&& capture_names) {
+  this->pattern_ = create_regex(pattern);
   this->names_ = move(capture_names);
 }
 
-RegexRouteMatcher::RegexRouteMatcher(const std::string &pattern, const std::vector<std::string>& capture_names) {
-  this->pattern_ = regex {pattern, regex_constants::ECMAScript | regex_constants::optimize};
+RegexRouteMatcher::RegexRouteMatcher(const string &pattern, const vector<string>& capture_names) {
+  this->pattern_ = create_regex(pattern);
   this->names_ = capture_names;
 }
 
