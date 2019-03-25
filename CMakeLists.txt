@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(LIBRARY_SOURCE_FILES "lib/mongoose/mongoose.c")
 add_library(suspiria ${LIBRARY_SOURCE_FILES}
         src/networking/server/http.cpp
-        src/networking/server/router.cpp
+        src/networking/graph_router.cpp
         src/networking/utility.cpp
         )
 target_include_directories(suspiria
