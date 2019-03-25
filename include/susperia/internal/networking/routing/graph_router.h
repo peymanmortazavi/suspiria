@@ -178,13 +178,13 @@ namespace suspiria {
        * @param builder the builder. This could be a lambda or a function reference.
        */
       void add_route_matcher_alias(std::string alias, RouteMatcherBuilder builder) {
-        this->_route_matcher_builder.emplace(std::move(alias), std::move(builder));
+        this->matcher_factory_registry_.add(std::move(alias), std::move(builder));
       }
 
       RouterNode<T>& get_root() noexcept { return _root; }
 
     private:
-      std::unordered_map<std::string, RouteMatcherBuilder> _route_matcher_builder;
+      utility::registry<RouteMatcherBuilder> matcher_factory_registry_;  // a registry for factories that make matchers.
       RouterNode<T> _root;
 
       bool _is_static(const std::string& route) {
@@ -228,7 +228,7 @@ namespace suspiria {
             if (auto dynamic_node = cursor->get_dynamic_node(hash))
               cursor = dynamic_node.get();
             else {
-              auto matcher = _route_matcher_builder[matcher_name](std::move(args));
+              auto matcher = matcher_factory_registry_[matcher_name](std::move(args));
               auto new_node = new RouterNode<T>();
               cursor->add_node(hash, std::move(matcher), std::shared_ptr<RouterNode<T>>(new_node));
               cursor = new_node;
