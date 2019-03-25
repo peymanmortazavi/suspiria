@@ -79,6 +79,7 @@ TEST_F(Networking_RouterTests, AddRouteWithNode) {
   router->add_route("/conflict/bad_merge1", make_shared<int>(4));
   router->add_route("/conflict/<re:\\d*>", make_shared<int>(5));
   router->add_route("/conflict/", conflict_router->get_root());
+  ASSERT_THROW(router->add_route("/<nothing>/", make_shared<int>(1)), suspiria::RegistryNotFound);
 
   assert_has_handler(router->resolve("/admin/users/"), 24);
   assert_has_handler(router->resolve("/admin/info/"), 25);
