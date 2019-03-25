@@ -1,76 +1,71 @@
-#include <utility>
-
 //
-// Created by Peyman Mortazavi on 2019-02-09.
+// Created by Peyman Mortazavi on 2019-03-25.
 //
 
-#ifndef SUSPIRIA_ROUTER_H
-#define SUSPIRIA_ROUTER_H
+#ifndef SUSPIRIA_GRAPH_ROUTER_H
+#define SUSPIRIA_GRAPH_ROUTER_H
 
-#include <algorithm>
-#include <unordered_map>
-#include <memory>
 #include <regex>
 #include <string>
 #include <vector>
-#include <functional>
 
-#include <susperia/internal/utility.h>
-
+#include "router.h"
 
 namespace suspiria {
 
   namespace networking {
 
-    typedef std::unordered_map<std::string, std::string> RouterParams;
-    typedef std::vector<std::string> RouteMatcherParams;
+    typedef std::vector<std::string> RouteMatcherArgs;
 
-    template<class T>
-    struct ResolveResult {
-      bool matched = false;
-      std::shared_ptr<T> handler = nullptr;
-      RouterParams params;
-    };
-
-    template<class T>
-    class Router {
-    public:
-      virtual ResolveResult<T> resolve(const std::string& path) const = 0;
-    };
-
-    /* RouteMatcher matches routes and extends the router params upon a successful match. */
-
+    /**
+     * RouteMatcher tests given router nodes and update the router params reference should it accept the route node.
+     * This is where regular expression matchers, validators or other processors can match the route node.
+     * It's recommended to avoid use of these matchers unless they are necessary. For instance, matching validity of a
+     * unique id might have performance cost in resolving many other resource paths but validating the id in the handler
+     * would isolate that performance cost to only the designated handler.
+     */
     class RouteMatcher {
     public:
       virtual ~RouteMatcher() = default;
       virtual bool match(const std::string& route, RouterParams& params) const noexcept = 0;
     };
 
+    /**
+     * A regular expression matcher that tests the route nodes against a regex pattern. It also supports regex groups.
+     * For instance: "<regex:(\d*)-(\d*):start:end>" when tested against "10-20" would set "start" to 10 and "end" to 20
+     * in the route parameters.
+     */
     class RegexRouteMatcher : public RouteMatcher {
     public:
       explicit RegexRouteMatcher(const std::string& pattern, const std::vector<std::string>& capture_names);
       explicit RegexRouteMatcher(const std::string& pattern, std::vector<std::string>&& capture_names);
+
       bool match(const std::string &route, RouterParams &params) const noexcept override;
-      static std::shared_ptr<RegexRouteMatcher> create_from_args(RouteMatcherParams&& route_args) {
-        auto pattern = route_args[0];
-        route_args.erase(route_args.begin());
-        return std::make_shared<RegexRouteMatcher>(pattern, std::move(route_args));
-      }
+
+      static std::shared_ptr<RegexRouteMatcher> create_from_args(RouteMatcherArgs&& args);
+
     private:
       std::regex _rule;
       std::vector<std::string> _names;
     };
 
+    /**
+     * Matches anything, it should be used to capture the values and put them in the route parameters.
+     */
     class VariableRouteMatcher : public RouteMatcher {
     public:
       explicit VariableRouteMatcher(std::string name) : _name(std::move(name)) {}
+
       bool match(const std::string &route, RouterParams &params) const noexcept override {
         params[_name] = route;
         return true;
       }
-      static std::shared_ptr<VariableRouteMatcher> create_from_args(RouteMatcherParams&& route_args) {
-        return std::make_shared<VariableRouteMatcher>(route_args[0]);
+
+      static std::shared_ptr<VariableRouteMatcher> create_from_args(RouteMatcherArgs&& args) {
+        if (args.empty()) throw std::invalid_argument("missing name from the args");
+        return std::make_shared<VariableRouteMatcher>(args[0]);
       }
+
     private:
       std::string _name;
     };
@@ -92,7 +87,7 @@ namespace suspiria {
       std::shared_ptr<T> handler = nullptr;
 
       void add_node(std::string name, std::shared_ptr<RouterNode> node) {
-          this->static_nodes[std::move(name)] = std::move(node);
+        this->static_nodes[std::move(name)] = std::move(node);
       }
       std::shared_ptr<RouterNode> get_static_node(const std::string& name) const noexcept {
         auto it = static_nodes.find(name);
@@ -101,7 +96,7 @@ namespace suspiria {
       }
 
       void add_node(size_t hash, std::shared_ptr<RouteMatcher> matcher, std::shared_ptr<RouterNode> node) {
-          this->dynamic_nodes.emplace_back(dynamic_node{hash, std::move(matcher), std::move(node)});
+        this->dynamic_nodes.emplace_back(dynamic_node{hash, std::move(matcher), std::move(node)});
       }
       std::shared_ptr<RouterNode> get_dynamic_node(const size_t& hash) const noexcept {
         auto find_it = std::find_if(begin(dynamic_nodes), end(dynamic_nodes), [&hash](auto& item) {
@@ -115,7 +110,7 @@ namespace suspiria {
     template<class T>
     class GraphRouter : public Router<T> {
     public:
-      typedef std::function<std::shared_ptr<RouteMatcher>(RouteMatcherParams&&)> RouteMatcherBuilder;
+      typedef std::function<std::shared_ptr<RouteMatcher>(RouteMatcherArgs&&)> RouteMatcherBuilder;
 
       GraphRouter() {
         // Register the basic route matchers.
@@ -224,7 +219,7 @@ namespace suspiria {
 
           // If route is dynamic and needs to create a matcher.
           std::string matcher_name;
-          RouteMatcherParams args;
+          RouteMatcherArgs args;
           if (_parse_dynamic_route(route, matcher_name, args)) {  // try to parse the route as a dynamic route format.
             auto hash = std::hash<std::string>()(route);  // make a hash of the route.
             if (auto dynamic_node = cursor->get_dynamic_node(hash))
@@ -245,27 +240,25 @@ namespace suspiria {
       }
 
       const RouterNode<T> * _resolve(const RouterNode<T>*& head, const std::string& route, RouterParams& params) const {
-          // First try the fast hash map approach for static static_nodes.
-          const auto& map_it = head->static_nodes.find(route);
-          if (map_it != end(head->static_nodes)) {
-              return map_it->second.get();
-          }
+        // First try the fast hash map approach for static static_nodes.
+        const auto& map_it = head->static_nodes.find(route);
+        if (map_it != end(head->static_nodes)) {
+          return map_it->second.get();
+        }
 
-          // Now go through all matchers and try to match.
-          const auto& matcher_it = std::find_if(begin(head->dynamic_nodes), end(head->dynamic_nodes), [&route, &params](auto& pair) {
-            return pair.matcher->match(route, params);
-          });
-          if (matcher_it != end(head->dynamic_nodes)) {
-              return matcher_it->node.get();
-          }
+        // Now go through all matchers and try to match.
+        const auto& matcher_it = std::find_if(begin(head->dynamic_nodes), end(head->dynamic_nodes), [&route, &params](auto& pair) {
+          return pair.matcher->match(route, params);
+        });
+        if (matcher_it != end(head->dynamic_nodes)) {
+          return matcher_it->node.get();
+        }
 
-          // Otherwise, just return nothing.
-          return nullptr;
+        // Otherwise, just return nothing.
+        return nullptr;
       }
     };
-
   }
-
 }
 
-#endif //SUSPIRIA_ROUTER_H
+#endif //SUSPIRIA_GRAPH_ROUTER_H

@@ -2,7 +2,7 @@
 // Created by Peyman Mortazavi on 2019-02-11.
 //
 
-#include <susperia/internal/networking/router.h>
+#include <susperia/internal/networking/routing/graph_router.h>
 
 using namespace std;
 using namespace suspiria::networking;
@@ -27,4 +27,11 @@ bool RegexRouteMatcher::match(const string &route, RouterParams &params) const n
     return true;
   }
   return false;
+}
+
+shared_ptr<RegexRouteMatcher> RegexRouteMatcher::create_from_args(RouteMatcherArgs &&args) {
+  if (args.empty()) throw std::invalid_argument("regex pattern missing from the args.");
+  auto pattern = args[0];
+  args.erase(args.begin());
+  return make_shared<RegexRouteMatcher>(pattern, move(args));
 }

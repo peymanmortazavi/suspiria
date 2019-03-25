@@ -8,7 +8,6 @@
 #include "internal/exceptions.h"
 #include "internal/utility.h"
 
-#include "internal/networking/router.h"
-#include "internal/networking/http.h"
+#include "internal/networking/networking.h"
 
 #endif //SUSPIRIA_SUSPIRIA_H
