@@ -89,6 +89,7 @@ namespace suspiria {
       void add_node(std::string name, std::shared_ptr<RouterNode> node) {
         this->static_nodes[std::move(name)] = std::move(node);
       }
+
       std::shared_ptr<RouterNode> get_static_node(const std::string& name) const noexcept {
         auto it = static_nodes.find(name);
         if (it == end(static_nodes)) return nullptr;
@@ -98,12 +99,13 @@ namespace suspiria {
       void add_node(size_t hash, std::shared_ptr<RouteMatcher> matcher, std::shared_ptr<RouterNode> node) {
         this->dynamic_nodes.emplace_back(dynamic_node{hash, std::move(matcher), std::move(node)});
       }
+
       std::shared_ptr<RouterNode> get_dynamic_node(const size_t& hash) const noexcept {
-        auto find_it = std::find_if(begin(dynamic_nodes), end(dynamic_nodes), [&hash](auto& item) {
+        auto it = std::find_if(begin(dynamic_nodes), end(dynamic_nodes), [&hash](auto& item) {
           return item.hash == hash;
         });
-        if (find_it == end(dynamic_nodes)) return nullptr;
-        return find_it->node;
+        if (it == end(dynamic_nodes)) return nullptr;
+        return it->node;
       }
     };
 
