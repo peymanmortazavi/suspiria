@@ -118,7 +118,7 @@ namespace suspiria {
       GraphRouter() {
         // Register the basic route matchers.
         this->add_route_matcher_alias("", &VariableRouteMatcher::create_from_args);
-        this->add_route_matcher_alias("regex", &RegexRouteMatcher::create_from_args);
+        this->add_route_matcher_alias("re", &RegexRouteMatcher::create_from_args);
       };
 
       RouterNode<T>& add_route(const std::string& path, const RouterNode<T>& node, const std::string& name="") {

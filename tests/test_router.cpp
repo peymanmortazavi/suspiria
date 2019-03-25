@@ -77,7 +77,7 @@ TEST_F(Networking_RouterTests, AddRouteWithNode) {
   new_node.add_node("info", info_node);
   router->add_route("/conflict/regular_node", make_shared<int>(3));
   router->add_route("/conflict/bad_merge1", make_shared<int>(4));
-  router->add_route("/conflict/<regex:\\d*>", make_shared<int>(5));
+  router->add_route("/conflict/<re:\\d*>", make_shared<int>(5));
   router->add_route("/conflict/", conflict_router->get_root());
 
   assert_has_handler(router->resolve("/admin/users/"), 24);
