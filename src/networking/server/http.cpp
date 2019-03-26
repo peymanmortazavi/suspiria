@@ -222,7 +222,7 @@ WebSocketServer::~WebSocketServer() {
 }
 
 
-HttpRequest::HttpRequest(RouterParams &params, mg_connection& connection, ostream &response_stream, istream &input_stream)
+HttpRequest::HttpRequest(RouteParams &params, mg_connection& connection, ostream &response_stream, istream &input_stream)
   : url_params(params), _response_stream(response_stream), _connection(connection), body(input_stream) {}
 
 

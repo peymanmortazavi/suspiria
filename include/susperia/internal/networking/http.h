@@ -27,8 +27,8 @@ namespace suspiria {
 
     class HttpRequest {
     public:
-      explicit HttpRequest(RouterParams& params, mg_connection& connection, std::ostream& response_stream, std::istream& input_stream);
-      RouterParams& url_params;
+      explicit HttpRequest(RouteParams& params, mg_connection& connection, std::ostream& response_stream, std::istream& input_stream);
+      RouteParams& url_params;
       std::istream& body;
 
     private:

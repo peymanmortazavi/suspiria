@@ -23,7 +23,7 @@ RegexRouteMatcher::RegexRouteMatcher(const string &pattern, const vector<string>
   this->names_ = capture_names;
 }
 
-bool RegexRouteMatcher::match(const string &route, RouterParams &params) const noexcept {
+bool RegexRouteMatcher::match(const string &route, RouteParams &params) const noexcept {
   smatch results;
   if (regex_match(route, results, pattern_)) {
     for (unsigned long index = 1; index < results.size(); index++) {
