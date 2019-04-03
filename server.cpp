@@ -5,6 +5,7 @@
 #include <map>
 #include <streambuf>
 #include <sstream>
+#include <unordered_set>
 
 #include <susperia/suspiria.h>
 
@@ -80,7 +81,144 @@ double timeit(PerformMethod&& perform) {
   return static_cast<chrono::duration<double>>(finish - start).count();
 }
 
+
+// TCP Connection
+#include <asio.hpp>
+
+using namespace asio;
+using namespace asio::ip;
+
+
+template <typename T>
+class pool {
+public:
+  explicit pool() = default;
+  pool(const pool&) = delete;
+
+  void add_connection(shared_ptr<T> connection) {
+    if (connections_.size() > 1)
+      return;
+    connection->async_activate();
+    connections_.emplace(move(connection));
+  }
+
+  void close_connection(const shared_ptr<T>& connection) {
+    auto it = connections_.find(connection);
+    if (it != end(connections_))
+      connections_.erase(it);
+  }
+
+  void close_all() {
+    connections_.clear();
+  }
+
+private:
+  unordered_set<shared_ptr<T>> connections_;
+};
+
+
+class tcp_connection : public std::enable_shared_from_this<tcp_connection> {
+public:
+  tcp_connection(const tcp_connection&) = delete;
+  explicit tcp_connection(tcp::socket&& socket, pool<tcp_connection>& pool) : socket_(move(socket)), pool_(pool) {}
+
+  tcp::socket& get_socket() { return socket_; }
+
+  void async_activate() {
+    this->run_receive_loop();
+  }
+
+  void close() {
+    pool_.close_connection(shared_from_this());
+  }
+
+  void handle(istream& request, ostream& response) {
+    string output;
+    request >> output;
+    if (output == "exit") {
+      response << "bye" << endl;
+      this->close();
+    }
+    response << "@echo: " << request.rdbuf() << endl;
+  }
+
+private:
+  void run_receive_loop() {
+    socket_.async_receive(recieve_buffer_.prepare(4), [this](const auto& error_code, size_t length) {
+      if (error_code) {
+        asio::error_code x;
+        cout << "receive code: " << error_code << endl;
+        this->close();
+        return;
+      }
+      cout << "Just received " << length << endl;
+      recieve_buffer_.commit(length);
+      istream is(&recieve_buffer_);
+      ostream os(&send_buffer_);
+      this->handle(is, os);
+      socket_.async_send(send_buffer_.data(), [this](const auto& error_code, size_t len) {
+        if (error_code) {
+          cout << "send code: " << error_code << endl;
+          return;
+        }
+        cout << "Just sent " << len << endl;
+        send_buffer_.consume(len);
+      });
+      this->run_receive_loop();
+    });
+  }
+
+  asio::streambuf recieve_buffer_;
+  asio::streambuf send_buffer_;
+  tcp::socket socket_;
+  pool<tcp_connection>& pool_;
+};
+
+
+class tcp_server {
+public:
+  tcp_server(tcp_server& server) = delete;
+  explicit tcp_server(io_context& io, const string& host, unsigned short port) : io_(io), host_(host), port_(port), acceptor_(io) {}
+
+  void start() {
+    tcp::resolver resolver{io_};
+    tcp::endpoint endpoint = *resolver.resolve(host_, to_string(port_)).begin();
+    this->acceptor_.open(endpoint.protocol());
+    this->acceptor_.set_option(tcp::acceptor::reuse_address(true));
+    this->acceptor_.bind(endpoint);
+    this->acceptor_.listen();
+    this->run_accept_loop();
+  }
+
+  void stop() {
+
+  }
+
+private:
+  void run_accept_loop() {
+    this->acceptor_.async_accept([this](const auto& error_code, auto socket) {
+      if (error_code) {
+        cerr << "error: " << error_code << endl;
+      } else {
+        pool_.add_connection(make_shared<tcp_connection>(move(socket), pool_));
+      }
+      run_accept_loop();
+    });
+  }
+
+  unsigned short port_;
+  string host_;
+  tcp::acceptor acceptor_;
+  io_context& io_;
+
+  pool<tcp_connection> pool_;
+};
+
+
 int main() {
-  start_server();
+  io_context io;
+  tcp_server server{io, "localhost", 1600};
+  server.start();
+  io.run();
   return 0;
 }
