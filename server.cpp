@@ -132,14 +132,15 @@ public:
     pool_.close_connection(shared_from_this());
   }
 
-  void handle(istream& request, ostream& response) {
+  bool handle(istream& request, ostream& response) {
     string output;
     request >> output;
     if (output == "exit") {
       response << "bye" << endl;
-      this->close();
+      return true;
     }
-    response << "@echo: " << request.rdbuf() << endl;
+    response << "@echo: " << output << endl;
+    return false;
   }
 
 private:
@@ -155,7 +156,7 @@ private:
       recieve_buffer_.commit(length);
       istream is(&recieve_buffer_);
       ostream os(&send_buffer_);
-      this->handle(is, os);
+      auto should_close = this->handle(is, os);
       socket_.async_send(send_buffer_.data(), [this](const auto& error_code, size_t len) {
         if (error_code) {
           cout << "send code: " << error_code << endl;
@@ -164,7 +165,11 @@ private:
         cout << "Just sent " << len << endl;
         send_buffer_.consume(len);
       });
-      this->run_receive_loop();
+      if (should_close) {
+        this->close();
+      } else {
+        this->run_receive_loop();
+      }
     });
   }
 
@@ -197,7 +202,8 @@ public:
 private:
   void run_accept_loop() {
     this->acceptor_.async_accept([this](const auto& error_code, auto socket) {
-      if (error_code) {
+      if (!socket.is_open()) return;  // If the socket isn't open for any reason, do not proceed.
+      if (error_code) {  // if there is any error, print it out for now and move on.
         cerr << "error: " << error_code << endl;
       } else {
         pool_.add_connection(make_shared<tcp_connection>(move(socket), pool_));
