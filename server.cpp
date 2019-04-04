@@ -132,6 +132,12 @@ public:
     pool_.close_connection(shared_from_this());
   }
 
+  void write(const asio::const_buffer& buffers) {
+    socket_.async_send(buffers, [this](const auto& error_code, size_t length)) {
+
+    }
+  }
+
   bool handle(istream& request, ostream& response) {
     string output;
     request >> output;
@@ -196,7 +202,8 @@ public:
   }
 
   void stop() {
-
+    this->acceptor_.close();
+    this->pool_.close_all();
   }
 
 private:
@@ -205,7 +212,7 @@ private:
       if (!socket.is_open()) return;  // If the socket isn't open for any reason, do not proceed.
       if (error_code) {  // if there is any error, print it out for now and move on.
         cerr << "error: " << error_code << endl;
-      } else {
+      } else {  // create a connection and add it to the connection pool.
         pool_.add_connection(make_shared<tcp_connection>(move(socket), pool_));
       }
       run_accept_loop();
