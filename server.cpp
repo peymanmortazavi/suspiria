@@ -84,6 +84,7 @@ double timeit(PerformMethod&& perform) {
 
 // TCP Connection
 #include <asio.hpp>
+#include "src/networking/http_parser.h"
 
 using namespace asio;
 using namespace asio::ip;
@@ -96,8 +97,6 @@ public:
   pool(const pool&) = delete;
 
   void add_connection(shared_ptr<T> connection) {
-    if (connections_.size() > 1)
-      return;
     connection->async_activate();
     connections_.emplace(move(connection));
   }
@@ -117,10 +116,22 @@ private:
 };
 
 
-class tcp_connection : public std::enable_shared_from_this<tcp_connection> {
+class http_connection : public std::enable_shared_from_this<http_connection> {
 public:
-  tcp_connection(const tcp_connection&) = delete;
-  explicit tcp_connection(tcp::socket&& socket, pool<tcp_connection>& pool) : socket_(move(socket)), pool_(pool) {}
+  http_connection(const http_connection&) = delete;
+  explicit http_connection(tcp::socket&& socket, pool<http_connection>& pool) : socket_(move(socket)), pool_(pool) {
+    http_parser_init(&parser_, HTTP_REQUEST);
+    parser_.data = this;
+    parser_settings_.on_body = &on_data_event;
+    parser_settings_.on_headers_complete = &on_event;
+    parser_settings_.on_message_begin = &on_event;
+    parser_settings_.on_url = &on_url_capture;
+    parser_settings_.on_message_complete = &on_request_ready;
+    rec_buff_ = new char[4];
+  }
+  ~http_connection() {
+    delete[] this->rec_buff_;
+  }
 
   tcp::socket& get_socket() { return socket_; }
 
@@ -129,67 +140,93 @@ public:
   }
 
   void close() {
+//    socket_.shutdown(socket_.shutdown_both);
     pool_.close_connection(shared_from_this());
   }
 
-  void write(const asio::const_buffer& buffers) {
-    socket_.async_send(buffers, [this](const auto& error_code, size_t length)) {
-
-    }
-  }
-
-  bool handle(istream& request, ostream& response) {
-    string output;
-    request >> output;
-    if (output == "exit") {
-      response << "bye" << endl;
-      return true;
-    }
-    response << "@echo: " << output << endl;
-    return false;
+  void handle(NewHttpRequest& request, ostream& response) {
+    response << "@url: " << request.uri << endl;
   }
 
 private:
+  static int on_request_ready(http_parser* parser) {
+    auto self = reinterpret_cast<http_connection*>(parser->data);
+    ostream os(&self->send_buffer_);
+    self->handle(self->request_, os);
+    auto n = self->socket_.send(self->send_buffer_.data());
+    self->send_buffer_.consume(n);
+//    self->close();
+    self->should_close_ = true;
+    // self->socket_.async_send(self->send_buffer_.data(), [&](const auto& error_code, size_t len) {
+    //     if (error_code) {
+    //       cout << "send code: " << error_code << endl;
+    //       self->close();
+    //       return;
+    //     }
+    //     self->send_buffer_.consume(len);
+    //     self->close();
+    //   });
+    return 10;
+  }
+
+  static int on_data_event(http_parser* parser, const char* at, unsigned long length) { return 0; }
+  static int on_event(http_parser* parser) { return 0; }
+  
+  static int on_url_capture(http_parser* parser, const char* at, unsigned long length) {
+    auto self = reinterpret_cast<http_connection*>(parser->data);
+    self->request_.uri += string{at, length};
+    return 0;
+  }
+
   void run_receive_loop() {
-    socket_.async_receive(recieve_buffer_.prepare(4), [this](const auto& error_code, size_t length) {
+    socket_.async_receive(asio::buffer(rec_buff_, 4), [this](const auto& error_code, size_t length) {
       if (error_code) {
-        asio::error_code x;
         cout << "receive code: " << error_code << endl;
         this->close();
         return;
       }
       cout << "Just received " << length << endl;
-      recieve_buffer_.commit(length);
-      istream is(&recieve_buffer_);
-      ostream os(&send_buffer_);
-      auto should_close = this->handle(is, os);
-      socket_.async_send(send_buffer_.data(), [this](const auto& error_code, size_t len) {
-        if (error_code) {
-          cout << "send code: " << error_code << endl;
-          return;
-        }
-        cout << "Just sent " << len << endl;
-        send_buffer_.consume(len);
-      });
-      if (should_close) {
+      auto consumed = http_parser_execute(&parser_, &parser_settings_, rec_buff_, length);
+      if (consumed != length) {
+        socket_.send(asio::buffer("BAD! I'm going away!\r\n"));
         this->close();
-      } else {
-        this->run_receive_loop();
+        return;
       }
+      // istream is(&recieve_buffer_);
+      // ostream os(&send_buffer_);
+      // this->handle(is, os);
+      // socket_.async_send(send_buffer_.data(), [this](const auto& error_code, size_t len) {
+      //   if (error_code) {
+      //     cout << "send code: " << error_code << endl;
+      //     return;
+      //   }
+      //   cout << "Just sent " << len << endl;
+      //   send_buffer_.consume(len);
+      // });
+      try { if (should_close_ || !socket_.is_open()) this->close(); else this->run_receive_loop(); }
+      catch (exception& error) { cerr << error.what() << endl; }
     });
   }
+
+  bool should_close_ = false;
+  char* rec_buff_;
+  
+  NewHttpRequest request_;
+  http_parser_settings parser_settings_;
+  http_parser parser_;
 
   asio::streambuf recieve_buffer_;
   asio::streambuf send_buffer_;
   tcp::socket socket_;
-  pool<tcp_connection>& pool_;
+  pool<http_connection>& pool_;
 };
 
 
+template<typename T>
 class tcp_server {
 public:
   tcp_server(tcp_server& server) = delete;
-  explicit tcp_server(io_context& io, const string& host, unsigned short port) : io_(io), host_(host), port_(port), acceptor_(io) {}
+  explicit tcp_server(io_context& io, string host, unsigned short port) : io_(io), host_(move(host)), port_(port), acceptor_(io) {}
 
   void start() {
     tcp::resolver resolver{io_};
@@ -213,7 +250,7 @@ private:
       if (error_code) {  // if there is any error, print it out for now and move on.
         cerr << "error: " << error_code << endl;
       } else {  // create a connection and add it to the connection pool.
-        pool_.add_connection(make_shared<tcp_connection>(move(socket), pool_));
+        pool_.add_connection(make_shared<T>(move(socket), pool_));
       }
       run_accept_loop();
     });
@@ -224,13 +261,15 @@ private:
   tcp::acceptor acceptor_;
   io_context& io_;
 
-  pool<tcp_connection> pool_;
+  pool<T> pool_;
 };
+
+typedef tcp_server<http_connection> http_server;
 
 
 int main() {
   io_context io;
-  tcp_server server{io, "localhost", 1600};
+  http_server server{io, "localhost", 1600};
   server.start();
   io.run();
   return 0;

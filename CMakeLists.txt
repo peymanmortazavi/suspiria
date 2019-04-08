@@ -8,7 +8,7 @@ add_library(suspiria ${LIBRARY_SOURCE_FILES}
         src/networking/server/http.cpp
         src/networking/graph_router.cpp
         src/networking/utility.cpp
-        )
+        src/networking/http_parser.c)
 target_include_directories(suspiria
         PUBLIC
             $<INSTALL_INTERFACE:include>

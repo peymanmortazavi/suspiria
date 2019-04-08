@@ -25,6 +25,14 @@ namespace suspiria {
       BadRequest = 400,
     };
 
+    class NewHttpRequest {
+    public:
+      std::string uri;
+      std::string method;
+      bool keep_alive = false;
+      std::unordered_map<std::string, std::string> headers;
+    };
+
     class HttpRequest {
     public:
       explicit HttpRequest(RouteParams& params, mg_connection& connection, std::ostream& response_stream, std::istream& input_stream);
