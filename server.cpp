@@ -95,16 +95,20 @@ class pool {
 public:
   explicit pool() = default;
   pool(const pool&) = delete;
+  ~pool() {
+    this->close_all();
+  }
 
   void add_connection(shared_ptr<T> connection) {
     connection->async_activate();
     connections_.emplace(move(connection));
   }
 
-  void close_connection(const shared_ptr<T>& connection) {
+  void close_connection(shared_ptr<T> connection) {
     auto it = connections_.find(connection);
-    if (it != end(connections_))
+    if (it != end(connections_)) {
       connections_.erase(it);
+    }
   }
 
   void close_all() {
@@ -123,6 +127,8 @@ public:
     http_parser_init(&parser_, HTTP_REQUEST);
     parser_.data = this;
     parser_settings_.on_body = &on_data_event;
+    parser_settings_.on_header_field = &on_header_field;
+    parser_settings_.on_header_value = &on_header_value;
     parser_settings_.on_headers_complete = &on_event;
     parser_settings_.on_message_begin = &on_event;
     parser_settings_.on_url = &on_url_capture;
@@ -140,12 +146,17 @@ public:
   }
 
   void close() {
-//    socket_.shutdown(socket_.shutdown_both);
+    cerr << "trying to close" << endl;
+    asio::error_code ec;
+    socket_.shutdown(socket_.shutdown_both, ec);
     pool_.close_connection(shared_from_this());
   }
 
   void handle(NewHttpRequest& request, ostream& response) {
     response << "@url: " << request.uri << endl;
+    for (auto& item : request.headers) {
+      response << "@header " << item.first << " = " << item.second << endl;
+    }
   }
 
 private:
@@ -153,20 +164,31 @@ private:
     auto self = reinterpret_cast<http_connection*>(parser->data);
     ostream os(&self->send_buffer_);
     self->handle(self->request_, os);
-    auto n = self->socket_.send(self->send_buffer_.data());
-    self->send_buffer_.consume(n);
-//    self->close();
-    self->should_close_ = true;
-    // self->socket_.async_send(self->send_buffer_.data(), [&](const auto& error_code, size_t len) {
-    //     if (error_code) {
-    //       cout << "send code: " << error_code << endl;
-    //       self->close();
-    //       return;
-    //     }
-    //     self->send_buffer_.consume(len);
-    //     self->close();
-    //   });
-    return 10;
+    self->socket_.async_send(self->send_buffer_.data(), [=](const auto& error_code, size_t len) {
+      if (error_code) {
+        cout << "send code: " << error_code << " = " << error_code.message() << endl;
+        self->close();
+        return;
+      }
+      self->send_buffer_.consume(len);
+      cerr << "closing" << endl;
+      self->close();
+    });
+    return 0;
+  }
+
+  static int on_header_field(http_parser* parser, const char* at, unsigned long length) {
+    auto self = reinterpret_cast<http_connection*>(parser->data);
+    if (self->should_reset_header_) self->temp_field_name_.clear();
+    self->should_reset_header_ = false;
+    self->temp_field_name_.append(at, length);
+    return 0;
+  }
+  static int on_header_value(http_parser* parser, const char* at, unsigned long length) {
+    auto self = reinterpret_cast<http_connection*>(parser->data);
+    self->should_reset_header_ = true;
+    self->request_.headers[self->temp_field_name_].append(at, length);
+    return 0;
   }
 
   static int on_data_event(http_parser* parser, const char* at, unsigned long length) { return 0; }
@@ -179,10 +201,11 @@ private:
   }
 
   void run_receive_loop() {
-    socket_.async_receive(asio::buffer(rec_buff_, 4), [this](const auto& error_code, size_t length) {
+    auto self(shared_from_this());
+    socket_.async_receive(asio::buffer(rec_buff_, 4), [this, self](const auto& error_code, size_t length) {
       if (error_code) {
-        cout << "receive code: " << error_code << endl;
-        this->close();
+        cout << "receive code: " << error_code << " = " << error_code.message() << endl;
+        if (error_code != asio::error::operation_aborted) this->close();
         return;
       }
       cout << "Just received " << length << endl;
@@ -192,23 +215,12 @@ private:
         this->close();
         return;
       }
-      // istream is(&recieve_buffer_);
-      // ostream os(&send_buffer_);
-      // this->handle(is, os);
-      // socket_.async_send(send_buffer_.data(), [this](const auto& error_code, size_t len) {
-      //   if (error_code) {
-      //     cout << "send code: " << error_code << endl;
-      //     return;
-      //   }
-      //   cout << "Just sent " << len << endl;
-      //   send_buffer_.consume(len);
-      // });
-      try { if (should_close_ || !socket_.is_open()) this->close(); else this->run_receive_loop(); }
-      catch (exception& error) { cerr << error.what() << endl; }
+      if (!socket_.is_open()) this->close(); else this->run_receive_loop();
     });
   }
 
-  bool should_close_ = false;
+  bool should_reset_header_ = false;
+  string temp_field_name_;
   char* rec_buff_;
   
   NewHttpRequest request_;

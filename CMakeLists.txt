@@ -16,6 +16,10 @@ target_include_directories(suspiria
         "lib"
 )
 
+if (UNIX)
+    target_link_libraries(suspiria pthread)
+endif ()
+
 
 add_executable(suspiria_server server.cpp)
 target_link_libraries(suspiria_server suspiria)
