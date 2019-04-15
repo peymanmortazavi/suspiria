@@ -83,6 +83,17 @@ double timeit(PerformMethod&& perform) {
 
 
 // TCP Connection
+/*
+ * From the looks of it, we want to have a connection that is just there to be a connection and we can close it when we
+ * desire. Then we want to have different protocols, like HTTP that can use the connection to tackle the request.
+ * Now for the http handler, we'll create a request instance and put the connection on the http request.
+ * That way if a response is just a straight forward response, we just return it. Otherwise, we'd have to call
+ * prepare on it when passing the http request class which would then allow the response to access the connection
+ * directly.
+ * As far as the protocol upgrades go, we can either update the handler on the connection. but in the case of WebSockets
+ * we might not need that. All we'd need is to stop calling the receive loop with the same handler and switch to one
+ * where we just send data and receive data and pass it to the handler returned by the user.
+**/
 #include <asio.hpp>
 #include "src/networking/http_parser.h"
 
@@ -120,10 +131,10 @@ private:
 };
 
 
-class http_connection : public std::enable_shared_from_this<http_connection> {
+class tcp_connection : public std::enable_shared_from_this<tcp_connection> {
 public:
-  http_connection(const http_connection&) = delete;
-  explicit http_connection(tcp::socket&& socket, pool<http_connection>& pool) : socket_(move(socket)), pool_(pool) {
+  tcp_connection(const tcp_connection&) = delete;
+  explicit tcp_connection(tcp::socket&& socket, pool<tcp_connection>& pool) : socket_(move(socket)), pool_(pool) {
     http_parser_init(&parser_, HTTP_REQUEST);
     parser_.data = this;
     parser_settings_.on_body = &on_data_event;
@@ -135,7 +146,7 @@ public:
     parser_settings_.on_message_complete = &on_request_ready;
     rec_buff_ = new char[4];
   }
-  ~http_connection() {
+  ~tcp_connection() {
     delete[] this->rec_buff_;
   }
 
@@ -161,7 +172,7 @@ public:
 
 private:
   static int on_request_ready(http_parser* parser) {
-    auto self = reinterpret_cast<http_connection*>(parser->data);
+    auto self = reinterpret_cast<tcp_connection*>(parser->data);
     ostream os(&self->send_buffer_);
     self->handle(self->request_, os);
     self->socket_.async_send(self->send_buffer_.data(), [=](const auto& error_code, size_t len) {
@@ -178,14 +189,14 @@ private:
   }
 
   static int on_header_field(http_parser* parser, const char* at, unsigned long length) {
-    auto self = reinterpret_cast<http_connection*>(parser->data);
+    auto self = reinterpret_cast<tcp_connection*>(parser->data);
     if (self->should_reset_header_) self->temp_field_name_.clear();
     self->should_reset_header_ = false;
     self->temp_field_name_.append(at, length);
     return 0;
   }
   static int on_header_value(http_parser* parser, const char* at, unsigned long length) {
-    auto self = reinterpret_cast<http_connection*>(parser->data);
+    auto self = reinterpret_cast<tcp_connection*>(parser->data);
     self->should_reset_header_ = true;
     self->request_.headers[self->temp_field_name_].append(at, length);
     return 0;
@@ -195,7 +206,7 @@ private:
   static int on_event(http_parser* parser) { return 0; }
   
   static int on_url_capture(http_parser* parser, const char* at, unsigned long length) {
-    auto self = reinterpret_cast<http_connection*>(parser->data);
+    auto self = reinterpret_cast<tcp_connection*>(parser->data);
     self->request_.uri.append(at, length);
     return 0;
   }
@@ -230,7 +241,7 @@ private:
   asio::streambuf recieve_buffer_;
   asio::streambuf send_buffer_;
   tcp::socket socket_;
-  pool<http_connection>& pool_;
+  pool<tcp_connection>& pool_;
 };
 
 
@@ -276,7 +287,7 @@ private:
   pool<T> pool_;
 };
 
-typedef tcp_server<http_connection> http_server;
+typedef tcp_server<tcp_connection> http_server;
 
 
 int main() {
