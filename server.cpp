@@ -196,7 +196,7 @@ private:
   
   static int on_url_capture(http_parser* parser, const char* at, unsigned long length) {
     auto self = reinterpret_cast<http_connection*>(parser->data);
-    self->request_.uri += string{at, length};
+    self->request_.uri.append(at, length);
     return 0;
   }
 
