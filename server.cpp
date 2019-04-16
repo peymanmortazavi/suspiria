@@ -13,6 +13,7 @@ using namespace std;
 using namespace suspiria::networking;
 
 
+#ifdef READY
 // Server Stuff
 class IndexHandler : public HttpRequestHandler {
   stringstream s;
@@ -66,7 +67,7 @@ void start_server() {
   server.polling_timeout = 200;
   server.start();
 }
-
+#endif
 
 // Testing stuff.
 #include <chrono>
@@ -101,7 +102,7 @@ using namespace asio;
 using namespace asio::ip;
 
 
-template <typename T>
+template <typename ConnectionType>
 class pool {
 public:
   explicit pool() = default;
@@ -110,12 +111,12 @@ public:
     this->close_all();
   }
 
-  void add_connection(shared_ptr<T> connection) {
+  void add_connection(shared_ptr<ConnectionType> connection) {
     connection->async_activate();
     connections_.emplace(move(connection));
   }
 
-  void close_connection(shared_ptr<T> connection) {
+  void close_connection(shared_ptr<ConnectionType> connection) {
     auto it = connections_.find(connection);
     if (it != end(connections_)) {
       connections_.erase(it);
@@ -127,7 +128,14 @@ public:
   }
 
 private:
-  unordered_set<shared_ptr<T>> connections_;
+  unordered_set<shared_ptr<ConnectionType>> connections_;
+};
+
+
+class protocol {
+public:
+  virtual void data_received(const char* bytes, size_t length) = 0;
+  virtual ~protocol() {};
 };
 
 
@@ -135,22 +143,17 @@ class tcp_connection : public std::enable_shared_from_this<tcp_connection> {
 public:
   tcp_connection(const tcp_connection&) = delete;
   explicit tcp_connection(tcp::socket&& socket, pool<tcp_connection>& pool) : socket_(move(socket)), pool_(pool) {
-    http_parser_init(&parser_, HTTP_REQUEST);
-    parser_.data = this;
-    parser_settings_.on_body = &on_data_event;
-    parser_settings_.on_header_field = &on_header_field;
-    parser_settings_.on_header_value = &on_header_value;
-    parser_settings_.on_headers_complete = &on_event;
-    parser_settings_.on_message_begin = &on_event;
-    parser_settings_.on_url = &on_url_capture;
-    parser_settings_.on_message_complete = &on_request_ready;
-    rec_buff_ = new char[4];
+    receive_buffer_ = new char[4];
   }
   ~tcp_connection() {
-    delete[] this->rec_buff_;
+    delete[] this->receive_buffer_;
   }
 
   tcp::socket& get_socket() { return socket_; }
+
+  void set_protocol(unique_ptr<protocol>&& protocol) {
+    protocol_ = move(protocol);
+  }
 
   void async_activate() {
     this->run_receive_loop();
@@ -163,89 +166,30 @@ public:
     pool_.close_connection(shared_from_this());
   }
 
-  void handle(NewHttpRequest& request, ostream& response) {
-    response << "@url: " << request.uri << endl;
-    for (auto& item : request.headers) {
-      response << "@header " << item.first << " = " << item.second << endl;
-    }
-  }
-
 private:
-  static int on_request_ready(http_parser* parser) {
-    auto self = reinterpret_cast<tcp_connection*>(parser->data);
-    ostream os(&self->send_buffer_);
-    self->handle(self->request_, os);
-    self->socket_.async_send(self->send_buffer_.data(), [=](const auto& error_code, size_t len) {
-      if (error_code) {
-        cout << "send code: " << error_code << " = " << error_code.message() << endl;
-        self->close();
-        return;
-      }
-      self->send_buffer_.consume(len);
-      cerr << "closing" << endl;
-      self->close();
-    });
-    return 0;
-  }
-
-  static int on_header_field(http_parser* parser, const char* at, unsigned long length) {
-    auto self = reinterpret_cast<tcp_connection*>(parser->data);
-    if (self->should_reset_header_) self->temp_field_name_.clear();
-    self->should_reset_header_ = false;
-    self->temp_field_name_.append(at, length);
-    return 0;
-  }
-  static int on_header_value(http_parser* parser, const char* at, unsigned long length) {
-    auto self = reinterpret_cast<tcp_connection*>(parser->data);
-    self->should_reset_header_ = true;
-    self->request_.headers[self->temp_field_name_].append(at, length);
-    return 0;
-  }
-
-  static int on_data_event(http_parser* parser, const char* at, unsigned long length) { return 0; }
-  static int on_event(http_parser* parser) { return 0; }
-  
-  static int on_url_capture(http_parser* parser, const char* at, unsigned long length) {
-    auto self = reinterpret_cast<tcp_connection*>(parser->data);
-    self->request_.uri.append(at, length);
-    return 0;
-  }
-
   void run_receive_loop() {
     auto self(shared_from_this());
-    socket_.async_receive(asio::buffer(rec_buff_, 4), [this, self](const auto& error_code, size_t length) {
+    socket_.async_receive(asio::buffer(receive_buffer_, 4), [this, self](const auto& error_code, size_t length) {
       if (error_code) {
         cout << "receive code: " << error_code << " = " << error_code.message() << endl;
         if (error_code != asio::error::operation_aborted) this->close();
         return;
       }
       cout << "Just received " << length << endl;
-      auto consumed = http_parser_execute(&parser_, &parser_settings_, rec_buff_, length);
-      if (consumed != length) {
-        socket_.send(asio::buffer("BAD! I'm going away!\r\n"));
-        this->close();
-        return;
-      }
+      protocol_->data_received(receive_buffer_, length);
       if (!socket_.is_open()) this->close(); else this->run_receive_loop();
     });
   }
 
-  bool should_reset_header_ = false;
-  string temp_field_name_;
-  char* rec_buff_;
-  
-  NewHttpRequest request_;
-  http_parser_settings parser_settings_;
-  http_parser parser_;
-
-  asio::streambuf recieve_buffer_;
+  unique_ptr<protocol> protocol_;
+  char* receive_buffer_;
   asio::streambuf send_buffer_;
   tcp::socket socket_;
   pool<tcp_connection>& pool_;
 };
 
 
-template<typename T>
+template<typename Protocol>
 class tcp_server {
 public:
   tcp_server(tcp_server& server) = delete;
@@ -273,7 +217,9 @@ private:
       if (error_code) {  // if there is any error, print it out for now and move on.
         cerr << "error: " << error_code << endl;
       } else {  // create a connection and add it to the connection pool.
-        pool_.add_connection(make_shared<T>(move(socket), pool_));
+        auto connection = make_shared<tcp_connection>(move(socket), pool_);
+        connection->set_protocol(make_unique<Protocol>(*connection));
+        pool_.add_connection(move(connection));
       }
       run_accept_loop();
     });
@@ -284,10 +230,51 @@ private:
   tcp::acceptor acceptor_;
   io_context& io_;
 
-  pool<T> pool_;
+  pool<tcp_connection> pool_;
 };
 
-typedef tcp_server<tcp_connection> http_server;
+class http : public protocol {
+public:
+  http(tcp_connection& connection) : connection_(connection) {
+    http_parser_init(&parser_, HTTP_REQUEST);
+    parser_.data = this;
+    parser_settings_.on_message_begin = &on_msg_begin;
+    parser_settings_.on_url = &on_url;
+    parser_settings_.on_message_complete = &on_msg_complete;
+  }
+  http(const http& another) = delete;
+
+  void data_received(const char* bytes, size_t length) override {
+    http_parser_execute(&parser_, &parser_settings_, bytes, length);
+  }
+
+private:
+  static int on_url(http_parser* parser, const char* at, size_t length) {
+    auto self = reinterpret_cast<http*>(parser->data);
+    cout << "URL ";
+    cout.write(at, length);
+    cout.flush();
+    return 0;
+  }
+
+  static int on_msg_begin(http_parser* parser) {
+    cout << "MSG begin" << endl;
+    return 0;
+  }
+  
+  static int on_msg_complete(http_parser* parser) {
+    cout << "MSG complete" << endl;
+    auto self = reinterpret_cast<http*>(parser->data);
+    self->connection_.close();
+    return 0;
+  }
+
+  http_parser parser_;
+  http_parser_settings parser_settings_;
+  tcp_connection& connection_;
+};
+
+typedef tcp_server<http> http_server;
 
 
 int main() {
