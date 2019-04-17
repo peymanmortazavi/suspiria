@@ -25,12 +25,19 @@ namespace suspiria {
     };
 
 
-    class NewHttpRequest {
+    class HttpRequest {
     public:
       std::string uri;
       std::string method;
       bool keep_alive = false;
       std::unordered_map<std::string, std::string> headers;
+
+      void reset() {
+        uri.clear();
+        method.clear();
+        keep_alive = false;
+        headers.clear();
+      }
     };
 
 
