@@ -3,7 +3,7 @@ project(Suspiria VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(LIBRARY_SOURCE_FILES "lib/mongoose/mongoose.c")
+set(LIBRARY_SOURCE_FILES "")
 add_library(suspiria ${LIBRARY_SOURCE_FILES}
         src/networking/http.cpp
         src/networking/graph_router.cpp
