@@ -96,16 +96,19 @@ double timeit(PerformMethod&& perform) {
  * where we just send data and receive data and pass it to the handler returned by the user.
 **/
 #include <asio.hpp>
-#include <asio/yield.hpp>
-#include "src/networking/http_parser.h"
-
 using namespace asio;
-using namespace asio::ip;
 
+void handle(HttpRequest& request) {
+  cout << "URL >> " << request.uri << "\n";
+  for (auto& item : request.headers) {
+    cout << "@ " << item.first << " = " << item.second << "\n";
+  }
+  cout << "eof --" << endl;
+}
 
 int main() {
   io_context io;
-  http_server server{io, "localhost", 1600};
+  http_server server{io, "localhost", 1600, handle};
   server.start();
   io.run();
   return 0;

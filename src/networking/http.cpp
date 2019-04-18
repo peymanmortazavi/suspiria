@@ -17,7 +17,7 @@ using namespace suspiria::networking;
 **/
 class http : public protocol {
 public:
-  http(tcp_connection& connection) : protocol(connection) {
+  http(tcp_connection& connection, http_delegate& delegate) : protocol(connection), delegate_(delegate) {
     http_parser_init(&parser_, HTTP_REQUEST);
     parser_.data = this;
     parser_settings_.on_message_begin = &on_msg_begin;
@@ -73,10 +73,7 @@ private:
   static int on_msg_complete(http_parser* parser) {
     cout << "MSG complete" << endl;
     auto self = reinterpret_cast<http*>(parser->data);
-    cout << self->request_.uri << endl;
-    for (auto& item : self->request_.headers) {
-      cout << item.first << " : " << item.second << endl;
-    }
+    self->delegate_.handle(self->request_);
     if (!self->request_.keep_alive)
       self->connection_.close();
     return 0;
@@ -87,9 +84,10 @@ private:
   HttpRequest request_;
   http_parser parser_;
   http_parser_settings parser_settings_;
+  http_delegate& delegate_;
 };
 
 
 unique_ptr<protocol> http_protocol_factory::create_protocol(tcp_connection& connection) {
-  return make_unique<http>(connection);
+  return make_unique<http>(connection, *delegate_);
 }
