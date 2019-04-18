@@ -39,6 +39,7 @@ private:
   static int on_url(http_parser* parser, const char* at, size_t length) {
     auto self = reinterpret_cast<http*>(parser->data);
     self->request_.uri.append(at, length);
+    self->request_.method = static_cast<HttpMethod>(self->parser_.method);
     return 0;
   }
 
@@ -73,6 +74,7 @@ private:
   static int on_msg_complete(http_parser* parser) {
     cout << "MSG complete" << endl;
     auto self = reinterpret_cast<http*>(parser->data);
+    self->request_.keep_alive = self->parser_.flags & flags::F_CONNECTION_KEEP_ALIVE;
     self->delegate_.handle(self->request_);
     if (!self->request_.keep_alive)
       self->connection_.close();

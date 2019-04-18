@@ -18,6 +18,14 @@ namespace suspiria {
 
   namespace networking {
 
+    enum HttpMethod : unsigned int {
+      DELETE = 0,
+      GET = 1,
+      HEAD = 2,
+      POST = 3,
+      PUT = 4,
+    };
+
     enum HttpStatus {
       OK = 200,
       NotFound = 404,
@@ -28,13 +36,12 @@ namespace suspiria {
     class HttpRequest {
     public:
       std::string uri;
-      std::string method;
+      HttpMethod method;
       bool keep_alive = false;
       std::unordered_map<std::string, std::string> headers;
 
       void reset() {
         uri.clear();
-        method.clear();
         keep_alive = false;
         headers.clear();
       }

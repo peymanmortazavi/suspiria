@@ -103,6 +103,8 @@ void handle(HttpRequest& request) {
   for (auto& item : request.headers) {
     cout << "@ " << item.first << " = " << item.second << "\n";
   }
+  cout << "# Keep Alive ? " << (request.keep_alive ? "Yes" : "No") << "\n";
+  cout << "# Method " << request.method << endl;
   cout << "eof --" << endl;
 }
 
