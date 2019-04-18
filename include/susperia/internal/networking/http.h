@@ -5,19 +5,26 @@
 #ifndef SUSPIRIA_HTTP_H
 #define SUSPIRIA_HTTP_H
 
-#include <iostream>
-#include <sstream>
+#include <memory>
 #include <unordered_map>
-#include <functional>
-
-#include <mongoose/mongoose.h>
+#include <string>
 
 #include "routing/routing.h"
+#include "ip.h"
+#include "protocol.h"
 
 
 namespace suspiria {
 
   namespace networking {
+
+    enum HttpMethod : unsigned int {
+      DELETE = 0,
+      GET = 1,
+      HEAD = 2,
+      POST = 3,
+      PUT = 4,
+    };
 
     enum HttpStatus {
       OK = 200,
@@ -25,73 +32,64 @@ namespace suspiria {
       BadRequest = 400,
     };
 
+
     class HttpRequest {
     public:
-      explicit HttpRequest(RouterParams& params, mg_connection& connection, std::ostream& response_stream, std::istream& input_stream);
-      RouterParams& url_params;
-      std::istream& body;
+      std::string uri;
+      HttpMethod method;
+      bool keep_alive = false;
+      std::unordered_map<std::string, std::string> headers;
 
-    private:
-      std::ostream& _response_stream;
-      mg_connection& _connection;
-
-      friend class StreamingResponse;
+      void reset() {
+        uri.clear();
+        keep_alive = false;
+        headers.clear();
+      }
     };
 
-    class HttpResponse {
-    public:
-      explicit HttpResponse(HttpStatus status = HttpStatus::OK) : status(status) {}
-      std::unordered_map<std::string, std::string> headers;
-      HttpStatus status;
 
-      virtual void write(std::ostream& output);
+    class http_delegate {
+    public:
+      virtual void handle(HttpRequest& request) {}
+    };
+
+
+    template<typename Handler>
+    class func_delegate : public http_delegate {
+    public:
+      explicit func_delegate(Handler&& handler) : handler_(std::move(handler)) {}
+      void handle(HttpRequest& request) override { handler_(request); }
+
+    private:
+      Handler handler_;
+    };
+
+
+    class http_protocol_factory : public protocol_factory {
+    public:
+      http_protocol_factory(std::shared_ptr<http_delegate> delegate) : delegate_(std::move(delegate)) {}
+
+      template<typename Handler>
+      http_protocol_factory(Handler handler) : delegate_(std::make_shared<func_delegate<Handler>>(std::move(handler))) {}
+
+      std::unique_ptr<protocol> create_protocol(tcp_connection& connection) override;
 
     protected:
-      void write_header(std::ostream& output);
+      std::shared_ptr<http_delegate> delegate_;
     };
 
-    class TextResponse : public HttpResponse {
+
+    class http_server : public tcp_server {
     public:
-      explicit TextResponse(std::string&& content, HttpStatus status = HttpStatus::OK);
-      void write(std::ostream& output) override;
-    private:
-      std::string _content;
-    };
+      http_server(const http_server& another) = delete;
+      explicit http_server(
+        asio::io_context& io, std::string host, unsigned short port, std::shared_ptr<http_delegate> delegate
+      ) : tcp_server(io, std::move(host), port, std::make_shared<http_protocol_factory>(std::move(delegate))) {}
 
-    class StreamingResponse : public HttpResponse {
-    public:
-      void prepare(HttpRequest& request, const std::function<void(std::ostream&)>& write_func);
-      void write(std::ostream& output) override { }
-    };
-
-    class HttpRequestHandler {
-    public:
-      virtual std::unique_ptr<HttpResponse> handle(HttpRequest& request) = 0;
-    };
-
-    class WebSocketServer {
-    public:
-
-      enum Status {
-        Listening,  // When actively listening.
-        Stopping,  // When the server is stopping all its operations and I/O loops. This is unlikely.
-        Idle,  // When the server is not doing anything. No I/O loop here.
-      };
-
-      explicit WebSocketServer(std::string address, std::shared_ptr<Router<HttpRequestHandler>> router);
-      ~WebSocketServer();
-      void start();
-      void stop();
-
-      const Status& get_status() const { return _status; }
-      int polling_timeout = 1000;  // timeout for every poll (in milliseconds)
-      inline const Router<HttpRequestHandler>& get_router() const { return *_router; }
-
-    private:
-      mg_mgr _manager;
-      std::string _address;
-      Status _status = Status::Idle;
-      std::shared_ptr<Router<HttpRequestHandler>> _router;
+      template<typename Handler>
+      explicit http_server(
+        asio::io_context& io, std::string host, unsigned short port, Handler handler
+      ) : tcp_server(io, std::move(host), port, std::make_shared<http_protocol_factory>(handler)) {}
     };
 
   }

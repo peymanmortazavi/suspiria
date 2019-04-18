@@ -6,6 +6,7 @@
 #define SUSPIRIA_NETWORKING_H
 
 #include "http.h"
+#include "ip.h"
 #include "routing/routing.h"
 
 #endif //SUSPIRIA_NETWORKING_H

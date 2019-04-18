@@ -28,7 +28,7 @@ namespace suspiria {
     class RouteMatcher {
     public:
       virtual ~RouteMatcher() = default;
-      virtual bool match(const std::string& route, RouterParams& params) const noexcept = 0;
+      virtual bool match(const std::string& route, RouteParams& params) const noexcept = 0;
     };
 
     /**
@@ -41,7 +41,7 @@ namespace suspiria {
       explicit RegexRouteMatcher(const std::string& pattern, const std::vector<std::string>& capture_names);
       explicit RegexRouteMatcher(const std::string& pattern, std::vector<std::string>&& capture_names);
 
-      bool match(const std::string &route, RouterParams &params) const noexcept override;
+      bool match(const std::string &route, RouteParams &params) const noexcept override;
 
       static std::shared_ptr<RegexRouteMatcher> create_from_args(RouteMatcherArgs&& args);
 
@@ -57,7 +57,7 @@ namespace suspiria {
     public:
       explicit VariableRouteMatcher(std::string name) : name_(std::move(name)) {}
 
-      bool match(const std::string &route, RouterParams &params) const noexcept override {
+      bool match(const std::string &route, RouteParams &params) const noexcept override {
         params[name_] = route;
         return true;
       }
@@ -242,7 +242,7 @@ namespace suspiria {
         return cursor;
       }
 
-      const RouterNode<T> * resolve(const RouterNode<T> *&head, const std::string &route, RouterParams &params) const {
+      const RouterNode<T> * resolve(const RouterNode<T> *&head, const std::string &route, RouteParams &params) const {
         // First try the fast hash map approach for static static_nodes.
         const auto& map_it = head->static_nodes.find(route);
         if (map_it != end(head->static_nodes)) {

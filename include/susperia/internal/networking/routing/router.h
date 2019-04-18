@@ -22,13 +22,13 @@ namespace suspiria {
 
   namespace networking {
 
-    typedef std::unordered_map<std::string, std::string> RouterParams;
+    typedef std::unordered_map<std::string, std::string> RouteParams;
 
     template<class T>
     struct ResolveResult {
       bool matched = false;
       std::shared_ptr<T> handler = nullptr;
-      RouterParams params;
+      RouteParams params;
     };
 
     template<class T>
