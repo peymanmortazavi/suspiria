@@ -67,12 +67,10 @@ private:
   static int on_msg_begin(http_parser* parser) {
     auto self = reinterpret_cast<http*>(parser->data);
     self->request_.reset();
-    cout << "HTTP New Message" << endl;
     return 0;
   }
 
   static int on_msg_complete(http_parser* parser) {
-    cout << "MSG complete" << endl;
     auto self = reinterpret_cast<http*>(parser->data);
     self->request_.keep_alive = self->parser_.flags & flags::F_CONNECTION_KEEP_ALIVE;
     self->delegate_.handle(self->request_);
