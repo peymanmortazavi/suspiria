@@ -15,7 +15,9 @@ namespace suspiria::networking {
   class protocol {
   public:
     protocol(tcp_connection& connection) : connection_(connection) {}
+    virtual void connection_made() = 0;
     virtual void data_received(const char* bytes, size_t length) = 0;
+    virtual void connection_lost() = 0;
     virtual ~protocol() {};
 
   protected:

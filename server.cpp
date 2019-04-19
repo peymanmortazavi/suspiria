@@ -98,14 +98,11 @@ double timeit(PerformMethod&& perform) {
 #include <asio.hpp>
 using namespace asio;
 
-void handle(HttpRequest& request) {
-  cout << "URL >> " << request.uri << "\n";
-  for (auto& item : request.headers) {
-    cout << "@ " << item.first << " = " << item.second << "\n";
-  }
-  cout << "# Keep Alive ? " << (request.keep_alive ? "Yes" : "No") << "\n";
-  cout << "# Method " << request.method << endl;
-  cout << "eof --" << endl;
+unique_ptr<HttpResponse> handle(HttpRequest& request) {
+  auto response = make_unique<HttpResponse>();
+  response->headers["Server"] = "suspiria";
+  response->headers["Date"] = "January 17th, 2018";
+  return response;
 }
 
 int main() {

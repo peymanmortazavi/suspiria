@@ -3,6 +3,7 @@
 //
 
 #include <iostream>
+#include <vector>
 
 #include "http_parser.h"
 
@@ -17,7 +18,7 @@ using namespace suspiria::networking;
 **/
 class http : public protocol {
 public:
-  http(tcp_connection& connection, http_delegate& delegate) : protocol(connection), delegate_(delegate) {
+  http(tcp_connection& connection, http_delegate& delegate) : protocol(connection), delegate_(delegate), request_(connection) {
     http_parser_init(&parser_, HTTP_REQUEST);
     parser_.data = this;
     parser_settings_.on_message_begin = &on_msg_begin;
@@ -29,6 +30,9 @@ public:
     parser_settings_.on_body = &on_body;
   }
   http(const http& another) = delete;
+
+  void connection_made() override {}
+  void connection_lost() override {}
 
   void data_received(const char* bytes, size_t length) override {
     http_parser_execute(&parser_, &parser_settings_, bytes, length);
@@ -73,7 +77,7 @@ private:
   static int on_msg_complete(http_parser* parser) {
     auto self = reinterpret_cast<http*>(parser->data);
     self->request_.keep_alive = self->parser_.flags & flags::F_CONNECTION_KEEP_ALIVE;
-    self->delegate_.handle(self->request_);
+    self->delegate_.handle(self->request_)->write(self->request_);
     if (!self->request_.keep_alive)
       self->connection_.close();
     return 0;
@@ -86,6 +90,28 @@ private:
   http_parser_settings parser_settings_;
   http_delegate& delegate_;
 };
+
+
+static string newline = "\r\n";
+
+
+void HttpResponse::write(HttpRequest& request) {
+  string result;
+  result += "HTTP/1.1 ";
+  result += to_string(this->status);
+  result += " OK";
+  result += newline;
+  for (auto& item : headers) {
+    result += item.first;
+    result += ": ";
+    result += item.second;
+    result += newline;
+  }
+  result += newline;
+
+  asio::error_code err;
+  request.connection_.get_socket().write_some(asio::buffer(result), err);
+}
 
 
 unique_ptr<protocol> http_protocol_factory::create_protocol(tcp_connection& connection) {

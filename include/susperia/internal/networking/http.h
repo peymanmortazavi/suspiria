@@ -9,6 +9,8 @@
 #include <unordered_map>
 #include <string>
 
+#include <asio.hpp>
+
 #include "routing/routing.h"
 #include "ip.h"
 #include "protocol.h"
@@ -35,6 +37,8 @@ namespace suspiria {
 
     class HttpRequest {
     public:
+      explicit HttpRequest(tcp_connection& connection) : connection_(connection) {}
+      friend class HttpResponse;
       std::string uri;
       HttpMethod method;
       bool keep_alive = false;
@@ -45,12 +49,26 @@ namespace suspiria {
         keep_alive = false;
         headers.clear();
       }
+      
+    private:
+      tcp_connection& connection_;
+    };
+
+
+    class HttpResponse {
+    public:
+      HttpStatus status = HttpStatus::OK;
+      std::unordered_map<std::string, std::string> headers;
+
+      virtual ~HttpResponse() {}
+
+      void write(HttpRequest& request);
     };
 
 
     class http_delegate {
     public:
-      virtual void handle(HttpRequest& request) {}
+      virtual std::unique_ptr<HttpResponse> handle(HttpRequest& request) = 0;
     };
 
 
@@ -58,7 +76,7 @@ namespace suspiria {
     class func_delegate : public http_delegate {
     public:
       explicit func_delegate(Handler&& handler) : handler_(std::move(handler)) {}
-      void handle(HttpRequest& request) override { handler_(request); }
+      std::unique_ptr<HttpResponse> handle(HttpRequest& request) override { return handler_(request); }
 
     private:
       Handler handler_;
