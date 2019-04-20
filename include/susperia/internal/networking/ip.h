@@ -26,7 +26,6 @@ namespace suspiria::networking {
     }
 
     void add_connection(std::shared_ptr<ConnectionType> connection) {
-      connection->async_activate();
       connections_.emplace(std::move(connection));
     }
 
@@ -60,20 +59,26 @@ namespace suspiria::networking {
 
     void set_protocol(std::unique_ptr<protocol>&& protocol) {
       protocol_ = std::move(protocol);
+      protocol_->connection_made();
+      this->resume_reading();
     }
 
-    void async_activate() {
-      this->run_receive_loop();
+    void pause_reading() { reading_paused_ = true; }
+    void resume_reading() {
+      reading_paused_ = false;
+      if (!is_reading_) run_receive_loop();
     }
 
     void close() {
       asio::error_code ec;
       socket_.shutdown(socket_.shutdown_both, ec);
+      protocol_->connection_lost();
       pool_.close_connection(shared_from_this());
     }
 
   private:
     void run_receive_loop() {
+      this->is_reading_ = true;
       auto self(shared_from_this());
       socket_.async_receive(asio::buffer(receive_buffer_, 4), [this, self](const auto& error_code, size_t length) {
         if (error_code) {
@@ -81,10 +86,18 @@ namespace suspiria::networking {
           return;
         }
         protocol_->data_received(receive_buffer_, length);
-        if (!socket_.is_open()) this->close(); else this->run_receive_loop();
+        if (!socket_.is_open()) {
+          this->close();
+        } else if (!this->reading_paused_) {
+          this->run_receive_loop();
+        } else {
+          this->is_reading_ = false;
+        }
       });
     }
 
+    bool is_reading_ = false;
+    bool reading_paused_ = false;
     std::unique_ptr<protocol> protocol_;
     char* receive_buffer_;
     asio::streambuf send_buffer_;

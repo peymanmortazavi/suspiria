@@ -102,6 +102,7 @@ unique_ptr<HttpResponse> handle(HttpRequest& request) {
   auto response = make_unique<HttpResponse>();
   response->headers["Server"] = "suspiria";
   response->headers["Date"] = "January 17th, 2018";
+  response->headers["Connection"] = "close";
   return response;
 }
 
